@@ -45,8 +45,6 @@ async function loadLevels() {
       action: "getLevels"
     });
 
-    console.log("getLevels result:", result);
-
     if (!result.success) {
       status.textContent = "Failed to load levels: " + result.error;
       return;
@@ -97,6 +95,8 @@ async function loadClasses() {
     option.textContent = className;
     classSelect.appendChild(option);
   });
+
+  document.getElementById("setupStatus").textContent = "Classes loaded.";
 }
 
 
@@ -131,7 +131,7 @@ async function loadRunStudents() {
   renderWaveAssignments();
 
   document.getElementById("setupStatus").textContent =
-    `${allStudents.length} students loaded.`;
+    `${allStudents.length} students loaded. Tap bubbles to assign waves.`;
 }
 
 
@@ -140,87 +140,92 @@ function renderWaveAssignments() {
   container.innerHTML = "";
 
   allStudents.forEach((student, index) => {
-    const row = document.createElement("div");
-    row.className = "student-row";
+    const bubble = document.createElement("div");
+    bubble.className = "student-bubble wave2";
+    bubble.id = `student-bubble-${index}`;
 
-    row.innerHTML = `
-      <div>${student.No}</div>
-      <div>
-        <strong>${student.Name}</strong><br>
-        <small>${student.Gender} | ${student.Group || ""}</small>
-      </div>
-      <div>
-        <label>
-          <input type="checkbox" id="wave1-${index}" onchange="assignSelectedToWave1()">
-          Wave 1
-        </label>
+    bubble.onclick = function () {
+      cycleStudentWave(index);
+    };
 
-        <label>
-          <input type="checkbox" id="notrunning-${index}" onchange="handleNotRunningChange(${index})">
-          Not Running
-        </label>
-
-        <div id="assigned-${index}">
-          Assigned: ${student.Wave || "Wave 2"}
-        </div>
-      </div>
+    bubble.innerHTML = `
+      <span class="reg-no">${student.No}</span>
+      <span class="student-name">${student.Name}</span>
+      <span class="bubble-status">Wave 2</span>
     `;
 
-    container.appendChild(row);
+    container.appendChild(bubble);
   });
 
-  assignSelectedToWave1();
-}
-
-
-function handleNotRunningChange(index) {
-  const wave1Checkbox = document.getElementById(`wave1-${index}`);
-  const notRunningCheckbox = document.getElementById(`notrunning-${index}`);
-
-  if (notRunningCheckbox.checked) {
-    wave1Checkbox.checked = false;
-    wave1Checkbox.disabled = true;
-  } else {
-    wave1Checkbox.disabled = false;
-  }
-
-  assignSelectedToWave1();
-}
-
-
-function assignSelectedToWave1() {
-  allStudents.forEach((student, index) => {
-    const wave1Checkbox = document.getElementById(`wave1-${index}`);
-    const notRunningCheckbox = document.getElementById(`notrunning-${index}`);
-    const assignedText = document.getElementById(`assigned-${index}`);
-
-    if (!wave1Checkbox || !notRunningCheckbox) {
-      return;
-    }
-
-    if (notRunningCheckbox.checked) {
-      student.Wave = "Not Running";
-      student.RunStatus = "Not Running";
-    } else if (wave1Checkbox.checked) {
-      student.Wave = "Wave 1";
-      student.RunStatus = "Wave 1";
-    } else {
-      student.Wave = "Wave 2";
-      student.RunStatus = "Wave 2";
-    }
-
-    if (assignedText) {
-      assignedText.textContent = "Assigned: " + student.Wave;
-    }
-  });
-
+  updateAllBubbleStyles();
+  updateWaveCounts();
   prepareWaveButtons();
 }
 
 
-async function saveWaveAssignments() {
-  assignSelectedToWave1();
+function cycleStudentWave(index) {
+  const student = allStudents[index];
 
+  if (student.Wave === "Wave 2") {
+    student.Wave = "Wave 1";
+    student.RunStatus = "Wave 1";
+  } else if (student.Wave === "Wave 1") {
+    student.Wave = "Not Running";
+    student.RunStatus = "Not Running";
+  } else {
+    student.Wave = "Wave 2";
+    student.RunStatus = "Wave 2";
+  }
+
+  updateBubbleStyle(index);
+  updateWaveCounts();
+  prepareWaveButtons();
+}
+
+
+function updateAllBubbleStyles() {
+  allStudents.forEach((student, index) => {
+    updateBubbleStyle(index);
+  });
+}
+
+
+function updateBubbleStyle(index) {
+  const student = allStudents[index];
+  const bubble = document.getElementById(`student-bubble-${index}`);
+
+  if (!bubble) return;
+
+  bubble.classList.remove("wave1", "wave2", "not-running");
+
+  if (student.Wave === "Wave 1") {
+    bubble.classList.add("wave1");
+  } else if (student.Wave === "Not Running") {
+    bubble.classList.add("not-running");
+  } else {
+    bubble.classList.add("wave2");
+  }
+
+  const status = bubble.querySelector(".bubble-status");
+
+  if (status) {
+    status.textContent = student.Wave;
+  }
+}
+
+
+function updateWaveCounts() {
+  const wave1Count = allStudents.filter(s => s.Wave === "Wave 1").length;
+  const wave2Count = allStudents.filter(s => s.Wave === "Wave 2").length;
+  const notRunningCount = allStudents.filter(s => s.Wave === "Not Running").length;
+
+  document.getElementById("wave1Count").textContent = wave1Count;
+  document.getElementById("wave2Count").textContent = wave2Count;
+  document.getElementById("notRunningCount").textContent = notRunningCount;
+}
+
+
+async function saveWaveAssignments() {
   const testDate = document.getElementById("testDate").value;
   const className = document.getElementById("classSelect").value;
 
@@ -330,7 +335,7 @@ function startWave() {
   timerInterval = setInterval(updateTimerDisplay, 500);
 
   document.getElementById("timerStatus").textContent =
-    `${wave} started. Tap student when finished.`;
+    `${wave} started. Tap pupil when finished.`;
 }
 
 
@@ -418,7 +423,7 @@ function endWave() {
   waveStartTime = null;
 
   document.getElementById("timerStatus").textContent =
-    `${wave} ended. ${remaining.length} students have no timing.`;
+    `${wave} ended. ${remaining.length} pupils have no timing.`;
 
   renderRemainingStudents(remaining);
   loadWaveSummary();
@@ -436,10 +441,10 @@ function renderRemainingStudents(remainingStudents) {
 
   remainingStudents.forEach((student, index) => {
     const div = document.createElement("div");
-    div.className = "student-row";
+    div.className = "remaining-row";
 
     div.innerHTML = `
-      <div>${student.No}</div>
+      <div><strong>${student.No}</strong></div>
       <div>${student.Name}</div>
       <div>
         <select id="remaining-status-${index}">
@@ -452,8 +457,8 @@ function renderRemainingStudents(remainingStudents) {
           <option value="Removed from Wave">Removed from Wave</option>
         </select>
 
-        <button onclick="markRemainingStatus('${student.ID}', ${index})">
-          Save Status
+        <button class="secondary-btn" onclick="markRemainingStatus('${student.ID}', ${index})">
+          Save
         </button>
       </div>
     `;
@@ -568,4 +573,6 @@ function clearRunPage() {
   document.getElementById("summaryTable").style.display = "none";
   document.getElementById("timerDisplay").textContent = "00:00";
   document.getElementById("timerStatus").textContent = "";
+
+  updateWaveCounts();
 }
