@@ -774,7 +774,7 @@ function endWave() {
 
   renderRemainingStudents(remaining);
   showStep("review");
-  loadWaveSummary();
+  loadAllWaveSummaries();
 }
 
 
@@ -844,7 +844,7 @@ async function markRemainingStatus(studentId, index) {
 
   if (result.success) {
     alert(`${student.Name} marked as ${status}.`);
-    loadWaveSummary();
+    loadAllWaveSummaries();
   } else {
     alert("Failed to mark status: " + result.error);
   }
@@ -914,7 +914,11 @@ async function loadSpecificWaveSummary(wave, tableId, bodyId) {
   sortedResults.forEach((row, index) => {
     const tr = document.createElement("tr");
 
-    const hasTiming = row.TimeSeconds !== "" && row.TimeSeconds !== null && row.TimeSeconds !== undefined;
+    const hasTiming =
+      row.TimeSeconds !== "" &&
+      row.TimeSeconds !== null &&
+      row.TimeSeconds !== undefined;
+
     const position = hasTiming ? index + 1 : "";
 
     tr.innerHTML = `
@@ -935,46 +939,9 @@ async function loadSpecificWaveSummary(wave, tableId, bodyId) {
 }
 
 
-// Keep this for older buttons/calls
+// Keep this for older calls
 async function loadWaveSummary() {
   await loadAllWaveSummaries();
-}
-
-  const wave = document.getElementById("waveSelect").value;
-
-  const result = await callBackend({
-    action: "getRunWaveSummary",
-    sessionId: sessionId,
-    wave: wave
-  });
-
-  if (!result.success) {
-    alert("Failed to load summary: " + result.error);
-    return;
-  }
-
-  const table = document.getElementById("summaryTable");
-  const tbody = document.getElementById("summaryBody");
-
-  tbody.innerHTML = "";
-
-  result.results.forEach(row => {
-    const tr = document.createElement("tr");
-
-    tr.innerHTML = `
-      <td>${row.No}</td>
-      <td>${row.Name}</td>
-      <td>${row.Time || ""}</td>
-      <td>${row.TimeSeconds || ""}</td>
-      <td>${row.Grade || ""}</td>
-      <td>${row.Status || ""}</td>
-      <td>${row.Remarks || ""}</td>
-    `;
-
-    tbody.appendChild(tr);
-  });
-
-  table.style.display = "table";
 }
 
 
@@ -1081,8 +1048,10 @@ function clearRunPage() {
   document.getElementById("studentAssignmentList").innerHTML = "";
   document.getElementById("runnerButtons").innerHTML = "";
   document.getElementById("remainingList").innerHTML = "";
-  document.getElementById("summaryBody").innerHTML = "";
-  document.getElementById("summaryTable").style.display = "none";
+  document.getElementById("wave1SummaryBody").innerHTML = "";
+  document.getElementById("wave2SummaryBody").innerHTML = "";
+  document.getElementById("wave1SummaryTable").style.display = "none";
+  document.getElementById("wave2SummaryTable").style.display = "none";
   document.getElementById("timerDisplay").textContent = "00:00";
   document.getElementById("timerStatus").textContent = "";
   document.getElementById("recentFinishList").innerHTML = "No finishes yet.";
