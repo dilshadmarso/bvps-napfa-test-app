@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BVPS NAPFA Admin Upload</title>
+</head>
+<body>
+  <h1>BVPS NAPFA Admin Upload</h1>
+
+  <label>Uploaded by:</label>
+  <input type="text" id="uploadedBy" placeholder="Enter your name">
+
+  <br><br>
+
+  <label>Upload Cockpit CSV:</label>
+  <input type="file" id="csvFile" accept=".csv">
+
+  <br><br>
+
+  <button onclick="uploadCockpitCsv()">Upload CSV</button>
+
+  <p id="status"></p>
+
+  <script src="script.js"></script>
+</body>
+</html>
