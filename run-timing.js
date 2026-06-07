@@ -872,11 +872,73 @@ function proceedToWave2() {
 }
 
 
-async function loadWaveSummary() {
+async function loadAllWaveSummaries() {
   if (!sessionId) {
     alert("No session ID yet. Save wave assignments first.");
     return;
   }
+
+  await loadSpecificWaveSummary("Wave 1", "wave1SummaryTable", "wave1SummaryBody");
+  await loadSpecificWaveSummary("Wave 2", "wave2SummaryTable", "wave2SummaryBody");
+}
+
+
+async function loadSpecificWaveSummary(wave, tableId, bodyId) {
+  const result = await callBackend({
+    action: "getRunWaveSummary",
+    sessionId: sessionId,
+    wave: wave
+  });
+
+  if (!result.success) {
+    alert("Failed to load " + wave + " summary: " + result.error);
+    return;
+  }
+
+  const table = document.getElementById(tableId);
+  const tbody = document.getElementById(bodyId);
+
+  tbody.innerHTML = "";
+
+  const sortedResults = result.results.sort((a, b) => {
+    const aSeconds = Number(a.TimeSeconds);
+    const bSeconds = Number(b.TimeSeconds);
+
+    if (!isNaN(aSeconds) && !isNaN(bSeconds)) {
+      return aSeconds - bSeconds;
+    }
+
+    return Number(a.No) - Number(b.No);
+  });
+
+  sortedResults.forEach((row, index) => {
+    const tr = document.createElement("tr");
+
+    const hasTiming = row.TimeSeconds !== "" && row.TimeSeconds !== null && row.TimeSeconds !== undefined;
+    const position = hasTiming ? index + 1 : "";
+
+    tr.innerHTML = `
+      <td>${position}</td>
+      <td>${row.No}</td>
+      <td>${row.Name}</td>
+      <td>${row.Time || ""}</td>
+      <td>${row.TimeSeconds || ""}</td>
+      <td>${row.Grade || ""}</td>
+      <td>${row.Status || ""}</td>
+      <td>${row.Remarks || ""}</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  table.style.display = "table";
+}
+
+
+// Keep this for older buttons/calls
+async function loadWaveSummary() {
+  await loadAllWaveSummaries();
+}
 
   const wave = document.getElementById("waveSelect").value;
 
