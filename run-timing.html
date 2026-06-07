@@ -113,6 +113,11 @@
       cursor: pointer;
     }
 
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .primary-btn {
       background: #1f3c88;
       color: white;
@@ -128,6 +133,11 @@
       color: #b00020;
     }
 
+    .warning-btn {
+      background: #fff3cd;
+      color: #7a4b00;
+    }
+
     .status {
       margin-top: 12px;
       font-weight: bold;
@@ -140,6 +150,15 @@
       padding: 12px;
       border-radius: 10px;
       margin-bottom: 14px;
+      font-size: 15px;
+    }
+
+    .warning-box {
+      background: #fff3cd;
+      border-left: 5px solid #f59e0b;
+      padding: 12px;
+      border-radius: 10px;
+      margin-top: 12px;
       font-size: 15px;
     }
 
@@ -239,14 +258,6 @@
       letter-spacing: 2px;
     }
 
-    .timer-controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-
     .runner-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
@@ -256,7 +267,7 @@
 
     .runner-btn {
       font-size: 18px;
-      min-height: 115px;
+      min-height: 125px;
       border-radius: 18px;
       background: white;
       border: 2px solid #cbd5e0;
@@ -283,6 +294,15 @@
       color: #7f1d1d;
     }
 
+    .undo-mini-btn {
+      margin-top: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      border-radius: 8px;
+      background: #fff3cd;
+      color: #7a4b00;
+    }
+
     .save-status-box {
       background: #f8fafc;
       border-radius: 14px;
@@ -290,6 +310,26 @@
       border: 1px solid #e2e8f0;
       margin-top: 10px;
       text-align: left;
+    }
+
+    .recent-list {
+      background: #f8fafc;
+      border-radius: 14px;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      margin-top: 12px;
+      text-align: left;
+    }
+
+    .recent-list h3 {
+      margin-top: 0;
+      color: #1f3c88;
+    }
+
+    .recent-item {
+      padding: 7px 0;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 15px;
     }
 
     .remaining-row {
@@ -355,7 +395,7 @@
   <div class="page">
     <div class="header">
       <h1>BVPS NAPFA 1.6 km Run Timing</h1>
-      <p>Capture finish times instantly. Results save in the background.</p>
+      <p>Tap pupils as they finish. Times are captured instantly and saved in the background.</p>
     </div>
 
     <div class="step-tabs">
@@ -389,6 +429,10 @@
         </div>
       </div>
 
+      <div class="warning-box">
+        Do not close this page during timing or while saves are pending. The app will warn you if there are unsaved timings.
+      </div>
+
       <p class="status" id="setupStatus"></p>
 
       <button class="primary-btn" onclick="showStep('assign')">
@@ -401,7 +445,7 @@
 
       <div class="hint">
         Tap pupils who will run in <strong>Wave 1</strong>. Pupils left blank will automatically become <strong>Wave 2</strong>.
-        Not participating reasons can be marked later.
+        Pupils not participating can be marked after the wave.
       </div>
 
       <div class="summary-strip">
@@ -445,6 +489,10 @@
         <div>
           <button class="danger-btn" onclick="endWave()">End Wave</button>
         </div>
+
+        <div>
+          <button class="warning-btn" onclick="undoLastTap()">Undo Last Tap</button>
+        </div>
       </div>
 
       <div class="timer-display" id="timerDisplay">00:00</div>
@@ -456,6 +504,11 @@
         <span id="queueStatus">No pending saves.</span>
       </div>
 
+      <div class="recent-list">
+        <h3>Recent Finishes</h3>
+        <div id="recentFinishList">No finishes yet.</div>
+      </div>
+
       <div class="runner-grid" id="runnerButtons"></div>
     </div>
 
@@ -464,6 +517,16 @@
       <p>After ending a wave, pupils without timing will appear here.</p>
 
       <div id="remainingList"></div>
+
+      <br>
+
+      <button class="primary-btn" onclick="proceedToWave2()">
+        Proceed to Wave 2
+      </button>
+
+      <button class="secondary-btn" onclick="showStep('timing')">
+        Back to Timing
+      </button>
 
       <h2>Wave Summary</h2>
 
