@@ -17,9 +17,9 @@
     }
 
     .page {
-      max-width: 1150px;
+      max-width: 1100px;
       margin: auto;
-      padding: 18px;
+      padding: 16px;
     }
 
     .header {
@@ -27,7 +27,7 @@
       color: white;
       padding: 20px;
       border-radius: 18px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .header h1 {
@@ -40,12 +40,38 @@
       opacity: 0.9;
     }
 
+    .step-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .step-tab {
+      background: #e9edf7;
+      color: #1f3c88;
+      border: none;
+      border-radius: 14px;
+      padding: 12px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .step-tab.active {
+      background: #1f3c88;
+      color: white;
+    }
+
     .card {
       background: white;
       border-radius: 18px;
       padding: 18px;
       margin-bottom: 18px;
       box-shadow: 0 4px 14px rgba(0,0,0,0.07);
+    }
+
+    .hidden {
+      display: none;
     }
 
     .card h2 {
@@ -117,45 +143,31 @@
       font-size: 15px;
     }
 
-    .legend {
-      display: flex;
-      flex-wrap: wrap;
+    .summary-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
       gap: 10px;
-      margin-bottom: 14px;
+      margin-top: 12px;
+      margin-bottom: 12px;
     }
 
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 14px;
-      background: #f3f4f6;
-      padding: 7px 10px;
-      border-radius: 999px;
+    .summary-box {
+      background: #f8fafc;
+      border-radius: 14px;
+      padding: 12px;
+      text-align: center;
+      border: 1px solid #e2e8f0;
     }
 
-    .legend-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 999px;
-      display: inline-block;
-    }
-
-    .dot-wave1 {
-      background: #37a169;
-    }
-
-    .dot-wave2 {
-      background: #4b7bec;
-    }
-
-    .dot-not-running {
-      background: #e53e3e;
+    .summary-number {
+      font-size: 28px;
+      font-weight: bold;
+      display: block;
     }
 
     .bubble-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 12px;
       margin-top: 12px;
     }
@@ -201,40 +213,14 @@
       background: rgba(255,255,255,0.75);
     }
 
+    .student-bubble.blank {
+      background: #f8fafc;
+      border-color: #cbd5e0;
+    }
+
     .student-bubble.wave1 {
       background: #dcfce7;
       border-color: #37a169;
-    }
-
-    .student-bubble.wave2 {
-      background: #e8f0ff;
-      border-color: #4b7bec;
-    }
-
-    .student-bubble.not-running {
-      background: #ffe0e0;
-      border-color: #e53e3e;
-    }
-
-    .summary-strip {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 10px;
-      margin-top: 12px;
-    }
-
-    .summary-box {
-      background: #f8fafc;
-      border-radius: 14px;
-      padding: 12px;
-      text-align: center;
-      border: 1px solid #e2e8f0;
-    }
-
-    .summary-number {
-      font-size: 28px;
-      font-weight: bold;
-      display: block;
     }
 
     .timer-area {
@@ -242,14 +228,14 @@
     }
 
     .timer-display {
-      font-size: 64px;
+      font-size: 68px;
       font-weight: 900;
       margin: 14px auto;
       padding: 18px;
       background: #111827;
       color: white;
       border-radius: 20px;
-      max-width: 300px;
+      max-width: 320px;
       letter-spacing: 2px;
     }
 
@@ -263,14 +249,14 @@
 
     .runner-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
       gap: 12px;
       margin-top: 18px;
     }
 
     .runner-btn {
       font-size: 18px;
-      min-height: 110px;
+      min-height: 115px;
       border-radius: 18px;
       background: white;
       border: 2px solid #cbd5e0;
@@ -279,7 +265,7 @@
     }
 
     .runner-btn .runner-no {
-      font-size: 34px;
+      font-size: 36px;
       font-weight: 900;
       display: block;
       margin-bottom: 6px;
@@ -291,9 +277,24 @@
       color: #22543d;
     }
 
+    .runner-btn.save-failed {
+      background: #ffe3e3;
+      border-color: #e53e3e;
+      color: #7f1d1d;
+    }
+
+    .save-status-box {
+      background: #f8fafc;
+      border-radius: 14px;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      margin-top: 10px;
+      text-align: left;
+    }
+
     .remaining-row {
       display: grid;
-      grid-template-columns: 70px 1fr 220px;
+      grid-template-columns: 70px 1fr 240px;
       gap: 10px;
       align-items: center;
       padding: 10px;
@@ -318,7 +319,7 @@
       background: #f3f4f6;
     }
 
-    @media (max-width: 600px) {
+    @media (max-width: 700px) {
       .page {
         padding: 10px;
       }
@@ -327,8 +328,12 @@
         font-size: 22px;
       }
 
+      .step-tabs {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
       .timer-display {
-        font-size: 50px;
+        font-size: 52px;
       }
 
       .remaining-row {
@@ -336,7 +341,11 @@
       }
 
       .bubble-grid {
-        grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      }
+
+      .runner-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       }
     }
   </style>
@@ -346,10 +355,17 @@
   <div class="page">
     <div class="header">
       <h1>BVPS NAPFA 1.6 km Run Timing</h1>
-      <p>Select Wave 1 pupils, mark Not Running, then time each wave.</p>
+      <p>Capture finish times instantly. Results save in the background.</p>
     </div>
 
-    <div class="card">
+    <div class="step-tabs">
+      <button class="step-tab active" id="tab-setup" onclick="showStep('setup')">1. Setup</button>
+      <button class="step-tab" id="tab-assign" onclick="showStep('assign')">2. Wave 1</button>
+      <button class="step-tab" id="tab-timing" onclick="showStep('timing')">3. Timing</button>
+      <button class="step-tab" id="tab-review" onclick="showStep('review')">4. Review</button>
+    </div>
+
+    <div class="card step-card" id="step-setup">
       <h2>1. Setup</h2>
 
       <div class="form-grid">
@@ -371,35 +387,21 @@
             <option value="">Select class</option>
           </select>
         </div>
-
-        <div>
-          <button class="primary-btn" onclick="saveWaveAssignments()">
-            Save Wave Assignments
-          </button>
-        </div>
       </div>
 
       <p class="status" id="setupStatus"></p>
+
+      <button class="primary-btn" onclick="showStep('assign')">
+        Next: Select Wave 1
+      </button>
     </div>
 
-    <div class="card">
-      <h2>2. Wave Assignment</h2>
+    <div class="card step-card hidden" id="step-assign">
+      <h2>2. Select Wave 1 Pupils</h2>
 
       <div class="hint">
-        Tap each pupil bubble to change status:
-        <strong>Wave 2 → Wave 1 → Not Running → Wave 2</strong>.
-      </div>
-
-      <div class="legend">
-        <div class="legend-item">
-          <span class="legend-dot dot-wave2"></span> Wave 2
-        </div>
-        <div class="legend-item">
-          <span class="legend-dot dot-wave1"></span> Wave 1
-        </div>
-        <div class="legend-item">
-          <span class="legend-dot dot-not-running"></span> Not Running
-        </div>
+        Tap pupils who will run in <strong>Wave 1</strong>. Pupils left blank will automatically become <strong>Wave 2</strong>.
+        Not participating reasons can be marked later.
       </div>
 
       <div class="summary-strip">
@@ -409,19 +411,23 @@
         </div>
         <div class="summary-box">
           <span class="summary-number" id="wave2Count">0</span>
-          Wave 2
-        </div>
-        <div class="summary-box">
-          <span class="summary-number" id="notRunningCount">0</span>
-          Not Running
+          Wave 2 by default
         </div>
       </div>
+
+      <button class="primary-btn" onclick="saveWaveAssignments()">
+        Save Wave Assignments
+      </button>
+
+      <button class="secondary-btn" onclick="showStep('timing')">
+        Go to Timing
+      </button>
 
       <div id="studentAssignmentList" class="bubble-grid"></div>
     </div>
 
-    <div class="card timer-area">
-      <h2>3. Timer</h2>
+    <div class="card step-card hidden timer-area" id="step-timing">
+      <h2>3. Timing</h2>
 
       <div class="form-grid">
         <div>
@@ -445,18 +451,21 @@
 
       <p class="status" id="timerStatus"></p>
 
+      <div class="save-status-box">
+        <strong>Save Queue:</strong>
+        <span id="queueStatus">No pending saves.</span>
+      </div>
+
       <div class="runner-grid" id="runnerButtons"></div>
     </div>
 
-    <div class="card">
-      <h2>4. Remaining Pupils</h2>
+    <div class="card step-card hidden" id="step-review">
+      <h2>4. Review Remaining Pupils</h2>
       <p>After ending a wave, pupils without timing will appear here.</p>
 
       <div id="remainingList"></div>
-    </div>
 
-    <div class="card">
-      <h2>5. Wave Summary</h2>
+      <h2>Wave Summary</h2>
 
       <button class="secondary-btn" onclick="loadWaveSummary()">
         Refresh Wave Summary
