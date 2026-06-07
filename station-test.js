@@ -30,12 +30,14 @@ async function callBackend(payload) {
 
 
 async function loadLevels() {
-  const status = document.getElementById("status");
+  const status = document.getElementById("setupStatus");
   status.textContent = "Loading levels...";
 
   const result = await callBackend({
     action: "getLevels"
   });
+
+  console.log("getLevels result:", result);
 
   if (!result.success) {
     status.textContent = "Failed to load levels: " + result.error;
@@ -52,7 +54,7 @@ async function loadLevels() {
     levelSelect.appendChild(option);
   });
 
-  status.textContent = "";
+  status.textContent = "Levels loaded.";
 }
 
 
