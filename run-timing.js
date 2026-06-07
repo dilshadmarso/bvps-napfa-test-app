@@ -24,53 +24,50 @@ function setTodayDate() {
 
 
 async function callBackend(payload) {
-  try {
-    const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
+  const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 
-    const text = await response.text();
-    console.log("Backend response:", text);
+  const text = await response.text();
+  console.log("Raw backend response:", text);
 
-    try {
-      return JSON.parse(text);
-    } catch (err) {
-      return {
-        success: false,
-        error: "Backend did not return JSON: " + text
-      };
-    }
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message
-    };
-  }
+  return JSON.parse(text);
 }
 
 
 async function loadLevels() {
-  const result = await callBackend({
-    action: "getLevels"
-  });
+  const status = document.getElementById("setupStatus");
+  status.textContent = "Loading levels...";
 
-  if (!result.success) {
-    document.getElementById("setupStatus").textContent =
-      "Failed to load levels: " + result.error;
-    return;
+  try {
+    const result = await callBackend({
+      action: "getLevels"
+    });
+
+    console.log("getLevels result:", result);
+
+    if (!result.success) {
+      status.textContent = "Failed to load levels: " + result.error;
+      return;
+    }
+
+    const levelSelect = document.getElementById("levelSelect");
+    levelSelect.innerHTML = `<option value="">Select level</option>`;
+
+    result.levels.forEach(level => {
+      const option = document.createElement("option");
+      option.value = level;
+      option.textContent = level;
+      levelSelect.appendChild(option);
+    });
+
+    status.textContent = "Levels loaded.";
+
+  } catch (error) {
+    console.error(error);
+    status.textContent = "Failed to load levels: " + error.message;
   }
-
-  const levelSelect = document.getElementById("levelSelect");
-  levelSelect.innerHTML = `<option value="">Select level</option>`;
-
-  result.levels.forEach(level => {
-    const option = document.createElement("option");
-    option.value = level;
-    option.textContent = level;
-    levelSelect.appendChild(option);
-  });
 }
 
 
@@ -124,16 +121,59 @@ async function loadRunStudents() {
   }
 
   allStudents = result.students.map(student => {
-  return {
-    ...student,
-    Wave: "Wave 2",
-    RunStatus: "Wave 2"
-  };
-});
+    return {
+      ...student,
+      Wave: "Wave 2",
+      RunStatus: "Wave 2"
+    };
+  });
 
   renderWaveAssignments();
 
-  function handleNotRunningChange(index) {
+  document.getElementById("setupStatus").textContent =
+    `${allStudents.length} students loaded.`;
+}
+
+
+function renderWaveAssignments() {
+  const container = document.getElementById("studentAssignmentList");
+  container.innerHTML = "";
+
+  allStudents.forEach((student, index) => {
+    const row = document.createElement("div");
+    row.className = "student-row";
+
+    row.innerHTML = `
+      <div>${student.No}</div>
+      <div>
+        <strong>${student.Name}</strong><br>
+        <small>${student.Gender} | ${student.Group || ""}</small>
+      </div>
+      <div>
+        <label>
+          <input type="checkbox" id="wave1-${index}" onchange="assignSelectedToWave1()">
+          Wave 1
+        </label>
+
+        <label>
+          <input type="checkbox" id="notrunning-${index}" onchange="handleNotRunningChange(${index})">
+          Not Running
+        </label>
+
+        <div id="assigned-${index}">
+          Assigned: ${student.Wave || "Wave 2"}
+        </div>
+      </div>
+    `;
+
+    container.appendChild(row);
+  });
+
+  assignSelectedToWave1();
+}
+
+
+function handleNotRunningChange(index) {
   const wave1Checkbox = document.getElementById(`wave1-${index}`);
   const notRunningCheckbox = document.getElementById(`notrunning-${index}`);
 
@@ -144,11 +184,7 @@ async function loadRunStudents() {
     wave1Checkbox.disabled = false;
   }
 
-  async function saveWaveAssignments() {
   assignSelectedToWave1();
-
-  const testDate = document.getElementById("testDate").value;
-  const className = document.getElementById("classSelect").value;
 }
 
 
@@ -181,38 +217,10 @@ function assignSelectedToWave1() {
   prepareWaveButtons();
 }
 
-  document.getElementById("setupStatus").textContent =
-    `${allStudents.length} students loaded.`;
-}
-
-
-function renderWaveAssignments() {
-  const container = document.getElementById("studentAssignmentList");
-  container.innerHTML = "";
-
-  allStudents.forEach((student, index) => {
-    const row = document.createElement("div");
-    row.className = "student-row";
-
-    row.innerHTML = `
-      <div>${student.No}</div>
-      <div>${student.Name}</div>
-      <div>
-        <select id="wave-${index}" onchange="updateStudentWave(${index})">
-          <option value="Wave 1" ${student.Wave === "Wave 1" ? "selected" : ""}>Wave 1</option>
-          <option value="Wave 2" ${student.Wave === "Wave 2" ? "selected" : ""}>Wave 2</option>
-          <option value="Not Running" ${student.Wave === "Not Running" ? "selected" : ""}>Not Running</option>
-        </select>
-      </div>
-    `;
-
-    container.appendChild(row);
-  });
-
-  prepareWaveButtons();
-}
 
 async function saveWaveAssignments() {
+  assignSelectedToWave1();
+
   const testDate = document.getElementById("testDate").value;
   const className = document.getElementById("classSelect").value;
 
@@ -273,6 +281,7 @@ function prepareWaveButtons() {
     const button = document.createElement("button");
     button.className = "runner-btn";
     button.id = `runner-${student.ID}`;
+
     button.onclick = function () {
       recordFinish(student);
     };
@@ -370,6 +379,7 @@ async function recordFinish(student) {
     finishedStudentIds.add(student.ID);
 
     const button = document.getElementById(`runner-${student.ID}`);
+
     if (button) {
       button.classList.add("finished");
       button.innerHTML = `
@@ -441,6 +451,7 @@ function renderRemainingStudents(remainingStudents) {
           <option value="Retest Needed">Retest Needed</option>
           <option value="Removed from Wave">Removed from Wave</option>
         </select>
+
         <button onclick="markRemainingStatus('${student.ID}', ${index})">
           Save Status
         </button>
