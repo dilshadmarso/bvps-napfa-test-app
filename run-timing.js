@@ -1,493 +1,751 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>BVPS NAPFA 1.6 km Run Timing</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+const GOOGLE_APPS_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
 
-  <style>
-    * {
-      box-sizing: border-box;
+let allStudents = [];
+let sessionId = "";
+let waveStartTime = null;
+let timerInterval = null;
+let finishedStudentIds = new Set();
+
+let saveQueue = [];
+let isSavingQueue = false;
+let capturedResults = [];
+
+
+window.onload = async function () {
+  setTodayDate();
+  await loadLevels();
+};
+
+
+function showStep(stepName) {
+  const steps = ["setup", "assign", "timing", "review"];
+
+  steps.forEach(step => {
+    document.getElementById(`step-${step}`).classList.add("hidden");
+    document.getElementById(`tab-${step}`).classList.remove("active");
+  });
+
+  document.getElementById(`step-${stepName}`).classList.remove("hidden");
+  document.getElementById(`tab-${stepName}`).classList.add("active");
+}
+
+
+function setTodayDate() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+
+  document.getElementById("testDate").value = `${yyyy}-${mm}-${dd}`;
+}
+
+
+async function callBackend(payload) {
+  const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+
+  const text = await response.text();
+  console.log("Raw backend response:", text);
+
+  return JSON.parse(text);
+}
+
+
+async function loadLevels() {
+  const status = document.getElementById("setupStatus");
+  status.textContent = "Loading levels...";
+
+  try {
+    const result = await callBackend({
+      action: "getLevels"
+    });
+
+    if (!result.success) {
+      status.textContent = "Failed to load levels: " + result.error;
+      return;
     }
 
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      background: #f5f7fb;
-      color: #222;
+    const levelSelect = document.getElementById("levelSelect");
+    levelSelect.innerHTML = `<option value="">Select level</option>`;
+
+    result.levels.forEach(level => {
+      const option = document.createElement("option");
+      option.value = level;
+      option.textContent = level;
+      levelSelect.appendChild(option);
+    });
+
+    status.textContent = "Levels loaded.";
+
+  } catch (error) {
+    console.error(error);
+    status.textContent = "Failed to load levels: " + error.message;
+  }
+}
+
+
+async function loadClasses() {
+  const level = document.getElementById("levelSelect").value;
+  const classSelect = document.getElementById("classSelect");
+
+  classSelect.innerHTML = `<option value="">Select class</option>`;
+  clearRunPage();
+
+  if (!level) return;
+
+  const result = await callBackend({
+    action: "getClasses",
+    level: level
+  });
+
+  if (!result.success) {
+    document.getElementById("setupStatus").textContent =
+      "Failed to load classes: " + result.error;
+    return;
+  }
+
+  result.classes.forEach(className => {
+    const option = document.createElement("option");
+    option.value = className;
+    option.textContent = className;
+    classSelect.appendChild(option);
+  });
+
+  document.getElementById("setupStatus").textContent = "Classes loaded.";
+}
+
+
+async function loadRunStudents() {
+  const className = document.getElementById("classSelect").value;
+
+  clearRunPage();
+
+  if (!className) return;
+
+  document.getElementById("setupStatus").textContent = "Loading students...";
+
+  const result = await callBackend({
+    action: "getRunStudentsByClass",
+    className: className
+  });
+
+  if (!result.success) {
+    document.getElementById("setupStatus").textContent =
+      "Failed to load students: " + result.error;
+    return;
+  }
+
+  allStudents = result.students.map(student => {
+    return {
+      ...student,
+      Wave: "Wave 2",
+      RunStatus: "Wave 2"
+    };
+  });
+
+  sessionId = `${className}-RUN-${document.getElementById("testDate").value}`;
+
+  renderWaveAssignments();
+
+  document.getElementById("setupStatus").textContent =
+    `${allStudents.length} students loaded. Go to Wave 1 selection.`;
+}
+
+
+function renderWaveAssignments() {
+  const container = document.getElementById("studentAssignmentList");
+  container.innerHTML = "";
+
+  allStudents.forEach((student, index) => {
+    const bubble = document.createElement("div");
+    bubble.className = "student-bubble blank";
+    bubble.id = `student-bubble-${index}`;
+
+    bubble.onclick = function () {
+      toggleWave1(index);
+    };
+
+    bubble.innerHTML = `
+      <span class="reg-no">${student.No}</span>
+      <span class="student-name">${student.Name}</span>
+      <span class="bubble-status">Wave 2</span>
+    `;
+
+    container.appendChild(bubble);
+  });
+
+  updateAllBubbleStyles();
+  updateWaveCounts();
+  prepareWaveButtons();
+}
+
+
+function toggleWave1(index) {
+  const student = allStudents[index];
+
+  if (student.Wave === "Wave 1") {
+    student.Wave = "Wave 2";
+    student.RunStatus = "Wave 2";
+  } else {
+    student.Wave = "Wave 1";
+    student.RunStatus = "Wave 1";
+  }
+
+  updateBubbleStyle(index);
+  updateWaveCounts();
+  prepareWaveButtons();
+}
+
+
+function updateAllBubbleStyles() {
+  allStudents.forEach((student, index) => {
+    updateBubbleStyle(index);
+  });
+}
+
+
+function updateBubbleStyle(index) {
+  const student = allStudents[index];
+  const bubble = document.getElementById(`student-bubble-${index}`);
+
+  if (!bubble) return;
+
+  bubble.classList.remove("wave1", "blank");
+
+  if (student.Wave === "Wave 1") {
+    bubble.classList.add("wave1");
+  } else {
+    bubble.classList.add("blank");
+  }
+
+  const status = bubble.querySelector(".bubble-status");
+
+  if (status) {
+    status.textContent = student.Wave === "Wave 1" ? "Wave 1" : "Wave 2";
+  }
+}
+
+
+function updateWaveCounts() {
+  const wave1Count = allStudents.filter(s => s.Wave === "Wave 1").length;
+  const wave2Count = allStudents.filter(s => s.Wave === "Wave 2").length;
+
+  document.getElementById("wave1Count").textContent = wave1Count;
+  document.getElementById("wave2Count").textContent = wave2Count;
+}
+
+
+async function saveWaveAssignments() {
+  const testDate = document.getElementById("testDate").value;
+  const className = document.getElementById("classSelect").value;
+
+  if (!testDate) {
+    alert("Please select test date.");
+    return;
+  }
+
+  if (!className) {
+    alert("Please select class.");
+    return;
+  }
+
+  if (allStudents.length === 0) {
+    alert("No students loaded.");
+    return;
+  }
+
+  sessionId = `${className}-RUN-${testDate}`;
+
+  const result = await callBackend({
+    action: "saveRunSession",
+    sessionId: sessionId,
+    testDate: testDate,
+    className: className,
+    mode: "1.6km Run",
+    students: allStudents.map(student => ({
+      No: student.No,
+      ID: student.ID,
+      Name: student.Name,
+      Wave: student.Wave,
+      RunStatus: student.RunStatus
+    }))
+  });
+
+  if (result.success) {
+    document.getElementById("setupStatus").textContent =
+      `Wave assignments saved. Session ID: ${result.sessionId}`;
+
+    alert("Wave assignments saved.");
+    showStep("timing");
+    prepareWaveButtons();
+
+  } else {
+    document.getElementById("setupStatus").textContent =
+      "Failed to save wave assignments: " + result.error;
+
+    alert("Failed to save wave assignments: " + result.error);
+  }
+}
+
+
+function prepareWaveButtons() {
+  const wave = document.getElementById("waveSelect").value;
+  const container = document.getElementById("runnerButtons");
+
+  container.innerHTML = "";
+
+  const alreadyCapturedIds = new Set(
+    capturedResults
+      .filter(result => result.wave === wave)
+      .map(result => String(result.studentId))
+  );
+
+  finishedStudentIds = new Set(alreadyCapturedIds);
+
+  const waveStudents = allStudents.filter(student => student.Wave === wave);
+
+  waveStudents.forEach(student => {
+    const button = document.createElement("button");
+    button.className = "runner-btn";
+    button.id = `runner-${student.ID}`;
+
+    const captured = capturedResults.find(result => {
+      return String(result.studentId) === String(student.ID) &&
+             result.wave === wave;
+    });
+
+    if (captured) {
+      button.classList.add(captured.saveFailed ? "save-failed" : "finished");
+      button.disabled = true;
+
+      button.innerHTML = `
+        <span class="runner-no">${student.No}</span>
+        ${student.Name}<br>
+        ${captured.displayTime}<br>
+        ${captured.saveFailed ? "Save failed" : "Captured"}
+      `;
+    } else {
+      button.onclick = function () {
+        recordFinish(student);
+      };
+
+      button.innerHTML = `
+        <span class="runner-no">${student.No}</span>
+        ${student.Name}
+      `;
     }
 
-    .page {
-      max-width: 1100px;
-      margin: auto;
-      padding: 16px;
+    container.appendChild(button);
+  });
+
+  document.getElementById("timerStatus").textContent =
+    `${waveStudents.length} pupils loaded for ${wave}.`;
+}
+
+
+function startWave() {
+  const className = document.getElementById("classSelect").value;
+
+  if (!className || allStudents.length === 0) {
+    alert("Please load a class first.");
+    return;
+  }
+
+  if (!sessionId) {
+    alert("Please save wave assignments first.");
+    return;
+  }
+
+  const wave = document.getElementById("waveSelect").value;
+  const waveStudents = allStudents.filter(student => student.Wave === wave);
+
+  if (waveStudents.length === 0) {
+    alert("No pupils assigned to this wave.");
+    return;
+  }
+
+  finishedStudentIds = new Set(
+    capturedResults
+      .filter(result => result.wave === wave)
+      .map(result => String(result.studentId))
+  );
+
+  waveStartTime = new Date();
+
+  if (timerInterval) {
+    clearInterval(timerInterval);
+  }
+
+  timerInterval = setInterval(updateTimerDisplay, 200);
+
+  document.getElementById("timerStatus").textContent =
+    `${wave} started. Tap pupils as they finish.`;
+}
+
+
+function updateTimerDisplay() {
+  if (!waveStartTime) return;
+
+  const now = new Date();
+  const elapsedSeconds = Math.floor((now - waveStartTime) / 1000);
+
+  document.getElementById("timerDisplay").textContent =
+    secondsToTimeText(elapsedSeconds);
+}
+
+
+function recordFinish(student) {
+  if (!waveStartTime) {
+    alert("Please start the wave first.");
+    return;
+  }
+
+  if (finishedStudentIds.has(String(student.ID))) {
+    return;
+  }
+
+  const tapTime = new Date();
+  const elapsedSeconds = Math.round((tapTime - waveStartTime) / 1000);
+  const displayTime = secondsToTimeText(elapsedSeconds);
+  const wave = document.getElementById("waveSelect").value;
+
+  finishedStudentIds.add(String(student.ID));
+
+  capturedResults.push({
+    studentId: String(student.ID),
+    wave: wave,
+    elapsedSeconds: elapsedSeconds,
+    displayTime: displayTime,
+    saveFailed: false
+  });
+
+  const button = document.getElementById(`runner-${student.ID}`);
+
+  if (button) {
+    button.classList.add("finished");
+    button.disabled = true;
+    button.innerHTML = `
+      <span class="runner-no">${student.No}</span>
+      ${student.Name}<br>
+      ${displayTime}<br>
+      Queued
+    `;
+  }
+
+  document.getElementById("timerStatus").textContent =
+    `${student.Name} captured at ${displayTime}.`;
+
+  const testDate = document.getElementById("testDate").value;
+  const className = document.getElementById("classSelect").value;
+
+  saveQueue.push({
+    student: student,
+    buttonId: `runner-${student.ID}`,
+    wave: wave,
+    displayTime: displayTime,
+    payload: {
+      action: "saveRunFinish",
+      sessionId: sessionId,
+      testDate: testDate,
+      className: className,
+      wave: wave,
+      student: student,
+      elapsedSeconds: elapsedSeconds,
+      attemptNo: 1,
+      remarks: ""
+    }
+  });
+
+  updateQueueStatus();
+  processSaveQueue();
+}
+
+
+async function processSaveQueue() {
+  if (isSavingQueue) return;
+
+  isSavingQueue = true;
+  updateQueueStatus();
+
+  while (saveQueue.length > 0) {
+    const item = saveQueue.shift();
+    const button = document.getElementById(item.buttonId);
+
+    if (button) {
+      button.innerHTML = `
+        <span class="runner-no">${item.student.No}</span>
+        ${item.student.Name}<br>
+        ${item.displayTime}<br>
+        Saving...
+      `;
     }
 
-    .header {
-      background: #1f3c88;
-      color: white;
-      padding: 20px;
-      border-radius: 18px;
-      margin-bottom: 16px;
-    }
+    try {
+      const result = await callBackend(item.payload);
 
-    .header h1 {
-      margin: 0;
-      font-size: 26px;
-    }
+      if (result.success) {
+        if (button) {
+          button.classList.remove("save-failed");
+          button.classList.add("finished");
 
-    .header p {
-      margin: 8px 0 0;
-      opacity: 0.9;
-    }
+          button.innerHTML = `
+            <span class="runner-no">${item.student.No}</span>
+            ${item.student.Name}<br>
+            ${result.result.Time}<br>
+            Grade: ${result.result.Grade}
+          `;
+        }
 
-    .step-tabs {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-bottom: 16px;
-    }
+        markCapturedSaveStatus(item.student.ID, item.wave, false);
 
-    .step-tab {
-      background: #e9edf7;
-      color: #1f3c88;
-      border: none;
-      border-radius: 14px;
-      padding: 12px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .step-tab.active {
-      background: #1f3c88;
-      color: white;
-    }
-
-    .card {
-      background: white;
-      border-radius: 18px;
-      padding: 18px;
-      margin-bottom: 18px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.07);
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .card h2 {
-      margin-top: 0;
-      font-size: 21px;
-      color: #1f3c88;
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 14px;
-      align-items: end;
-    }
-
-    label {
-      font-weight: bold;
-      font-size: 14px;
-      display: block;
-      margin-bottom: 6px;
-    }
-
-    select,
-    input {
-      width: 100%;
-      padding: 11px;
-      font-size: 16px;
-      border-radius: 10px;
-      border: 1px solid #c9cdd6;
-      background: white;
-    }
-
-    button {
-      border: none;
-      border-radius: 12px;
-      padding: 12px 16px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .primary-btn {
-      background: #1f3c88;
-      color: white;
-    }
-
-    .secondary-btn {
-      background: #e9edf7;
-      color: #1f3c88;
-    }
-
-    .danger-btn {
-      background: #ffe3e3;
-      color: #b00020;
-    }
-
-    .status {
-      margin-top: 12px;
-      font-weight: bold;
-      color: #333;
-    }
-
-    .hint {
-      background: #eef3ff;
-      border-left: 5px solid #1f3c88;
-      padding: 12px;
-      border-radius: 10px;
-      margin-bottom: 14px;
-      font-size: 15px;
-    }
-
-    .summary-strip {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 10px;
-      margin-top: 12px;
-      margin-bottom: 12px;
-    }
-
-    .summary-box {
-      background: #f8fafc;
-      border-radius: 14px;
-      padding: 12px;
-      text-align: center;
-      border: 1px solid #e2e8f0;
-    }
-
-    .summary-number {
-      font-size: 28px;
-      font-weight: bold;
-      display: block;
-    }
-
-    .bubble-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 12px;
-      margin-top: 12px;
-    }
-
-    .student-bubble {
-      border: 2px solid #cbd5e0;
-      border-radius: 20px;
-      padding: 14px 10px;
-      min-height: 105px;
-      cursor: pointer;
-      background: white;
-      text-align: center;
-      user-select: none;
-      transition: 0.15s;
-    }
-
-    .student-bubble:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    }
-
-    .student-bubble .reg-no {
-      font-size: 30px;
-      font-weight: 800;
-      display: block;
-      line-height: 1;
-    }
-
-    .student-bubble .student-name {
-      font-size: 13px;
-      font-weight: bold;
-      display: block;
-      margin-top: 8px;
-      min-height: 32px;
-    }
-
-    .student-bubble .bubble-status {
-      font-size: 13px;
-      display: inline-block;
-      margin-top: 8px;
-      padding: 4px 9px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.75);
-    }
-
-    .student-bubble.blank {
-      background: #f8fafc;
-      border-color: #cbd5e0;
-    }
-
-    .student-bubble.wave1 {
-      background: #dcfce7;
-      border-color: #37a169;
-    }
-
-    .timer-area {
-      text-align: center;
-    }
-
-    .timer-display {
-      font-size: 68px;
-      font-weight: 900;
-      margin: 14px auto;
-      padding: 18px;
-      background: #111827;
-      color: white;
-      border-radius: 20px;
-      max-width: 320px;
-      letter-spacing: 2px;
-    }
-
-    .timer-controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-
-    .runner-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
-      gap: 12px;
-      margin-top: 18px;
-    }
-
-    .runner-btn {
-      font-size: 18px;
-      min-height: 115px;
-      border-radius: 18px;
-      background: white;
-      border: 2px solid #cbd5e0;
-      color: #111827;
-      padding: 12px;
-    }
-
-    .runner-btn .runner-no {
-      font-size: 36px;
-      font-weight: 900;
-      display: block;
-      margin-bottom: 6px;
-    }
-
-    .runner-btn.finished {
-      background: #dcfce7;
-      border-color: #37a169;
-      color: #22543d;
-    }
-
-    .runner-btn.save-failed {
-      background: #ffe3e3;
-      border-color: #e53e3e;
-      color: #7f1d1d;
-    }
-
-    .save-status-box {
-      background: #f8fafc;
-      border-radius: 14px;
-      padding: 12px;
-      border: 1px solid #e2e8f0;
-      margin-top: 10px;
-      text-align: left;
-    }
-
-    .remaining-row {
-      display: grid;
-      grid-template-columns: 70px 1fr 240px;
-      gap: 10px;
-      align-items: center;
-      padding: 10px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 12px;
-      font-size: 14px;
-    }
-
-    th,
-    td {
-      border: 1px solid #d1d5db;
-      padding: 8px;
-      text-align: left;
-    }
-
-    th {
-      background: #f3f4f6;
-    }
-
-    @media (max-width: 700px) {
-      .page {
-        padding: 10px;
+      } else {
+        markSaveFailed(item, button);
       }
 
-      .header h1 {
-        font-size: 22px;
-      }
-
-      .step-tabs {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .timer-display {
-        font-size: 52px;
-      }
-
-      .remaining-row {
-        grid-template-columns: 1fr;
-      }
-
-      .bubble-grid {
-        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-      }
-
-      .runner-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      }
+    } catch (error) {
+      markSaveFailed(item, button);
     }
-  </style>
-</head>
 
-<body>
-  <div class="page">
-    <div class="header">
-      <h1>BVPS NAPFA 1.6 km Run Timing</h1>
-      <p>Capture finish times instantly. Results save in the background.</p>
-    </div>
+    updateQueueStatus();
+  }
 
-    <div class="step-tabs">
-      <button class="step-tab active" id="tab-setup" onclick="showStep('setup')">1. Setup</button>
-      <button class="step-tab" id="tab-assign" onclick="showStep('assign')">2. Wave 1</button>
-      <button class="step-tab" id="tab-timing" onclick="showStep('timing')">3. Timing</button>
-      <button class="step-tab" id="tab-review" onclick="showStep('review')">4. Review</button>
-    </div>
+  isSavingQueue = false;
+  updateQueueStatus();
+}
 
-    <div class="card step-card" id="step-setup">
-      <h2>1. Setup</h2>
 
-      <div class="form-grid">
-        <div>
-          <label>Test Date</label>
-          <input type="date" id="testDate">
-        </div>
+function markSaveFailed(item, button) {
+  if (button) {
+    button.classList.remove("finished");
+    button.classList.add("save-failed");
 
-        <div>
-          <label>Level</label>
-          <select id="levelSelect" onchange="loadClasses()">
-            <option value="">Select level</option>
-          </select>
-        </div>
+    button.innerHTML = `
+      <span class="runner-no">${item.student.No}</span>
+      ${item.student.Name}<br>
+      ${item.displayTime}<br>
+      Save failed
+    `;
+  }
 
-        <div>
-          <label>Class</label>
-          <select id="classSelect" onchange="loadRunStudents()">
-            <option value="">Select class</option>
-          </select>
-        </div>
+  markCapturedSaveStatus(item.student.ID, item.wave, true);
+}
+
+
+function markCapturedSaveStatus(studentId, wave, saveFailed) {
+  const record = capturedResults.find(result => {
+    return String(result.studentId) === String(studentId) &&
+           result.wave === wave;
+  });
+
+  if (record) {
+    record.saveFailed = saveFailed;
+  }
+}
+
+
+function updateQueueStatus() {
+  const queueText = document.getElementById("queueStatus");
+
+  if (!queueText) return;
+
+  if (saveQueue.length === 0 && !isSavingQueue) {
+    queueText.textContent = "No pending saves.";
+    return;
+  }
+
+  if (isSavingQueue) {
+    queueText.textContent = `Saving... ${saveQueue.length} waiting.`;
+    return;
+  }
+
+  queueText.textContent = `${saveQueue.length} waiting to save.`;
+}
+
+
+function endWave() {
+  if (!waveStartTime) {
+    alert("Wave has not started.");
+    return;
+  }
+
+  if (timerInterval) {
+    clearInterval(timerInterval);
+  }
+
+  const wave = document.getElementById("waveSelect").value;
+  const waveStudents = allStudents.filter(student => student.Wave === wave);
+
+  const capturedIdsForWave = new Set(
+    capturedResults
+      .filter(result => result.wave === wave)
+      .map(result => String(result.studentId))
+  );
+
+  const remaining = waveStudents.filter(student => {
+    return !capturedIdsForWave.has(String(student.ID));
+  });
+
+  waveStartTime = null;
+
+  document.getElementById("timerStatus").textContent =
+    `${wave} ended. ${remaining.length} pupils have no timing.`;
+
+  renderRemainingStudents(remaining);
+  showStep("review");
+  loadWaveSummary();
+}
+
+
+function renderRemainingStudents(remainingStudents) {
+  const container = document.getElementById("remainingList");
+  container.innerHTML = "";
+
+  if (remainingStudents.length === 0) {
+    container.innerHTML = "<p>All pupils in this wave have timing.</p>";
+    return;
+  }
+
+  remainingStudents.forEach((student, index) => {
+    const div = document.createElement("div");
+    div.className = "remaining-row";
+
+    div.innerHTML = `
+      <div><strong>${student.No}</strong></div>
+      <div>${student.Name}</div>
+      <div>
+        <select id="remaining-status-${index}">
+          <option value="Still Running">Still Running</option>
+          <option value="DNF">DNF</option>
+          <option value="Did Not Start">Did Not Start</option>
+          <option value="Medical">Medical</option>
+          <option value="Injured">Injured</option>
+          <option value="Retest Needed">Retest Needed</option>
+          <option value="Removed from Wave">Removed from Wave</option>
+          <option value="Not Running">Not Running</option>
+        </select>
+
+        <button class="secondary-btn" onclick="markRemainingStatus('${student.ID}', ${index})">
+          Save
+        </button>
       </div>
+    `;
 
-      <p class="status" id="setupStatus"></p>
+    container.appendChild(div);
+  });
+}
 
-      <button class="primary-btn" onclick="showStep('assign')">
-        Next: Select Wave 1
-      </button>
-    </div>
 
-    <div class="card step-card hidden" id="step-assign">
-      <h2>2. Select Wave 1 Pupils</h2>
+async function markRemainingStatus(studentId, index) {
+  const student = allStudents.find(s => String(s.ID) === String(studentId));
 
-      <div class="hint">
-        Tap pupils who will run in <strong>Wave 1</strong>. Pupils left blank will automatically become <strong>Wave 2</strong>.
-        Not participating reasons can be marked later.
-      </div>
+  if (!student) {
+    alert("Student not found.");
+    return;
+  }
 
-      <div class="summary-strip">
-        <div class="summary-box">
-          <span class="summary-number" id="wave1Count">0</span>
-          Wave 1
-        </div>
-        <div class="summary-box">
-          <span class="summary-number" id="wave2Count">0</span>
-          Wave 2 by default
-        </div>
-      </div>
+  const status = document.getElementById(`remaining-status-${index}`).value;
+  const testDate = document.getElementById("testDate").value;
+  const className = document.getElementById("classSelect").value;
+  const wave = document.getElementById("waveSelect").value;
 
-      <button class="primary-btn" onclick="saveWaveAssignments()">
-        Save Wave Assignments
-      </button>
+  const result = await callBackend({
+    action: "markRunStatus",
+    sessionId: sessionId,
+    testDate: testDate,
+    className: className,
+    wave: wave,
+    student: student,
+    status: status,
+    remarks: "",
+    attemptNo: 1
+  });
 
-      <button class="secondary-btn" onclick="showStep('timing')">
-        Go to Timing
-      </button>
+  if (result.success) {
+    alert(`${student.Name} marked as ${status}.`);
+    loadWaveSummary();
+  } else {
+    alert("Failed to mark status: " + result.error);
+  }
+}
 
-      <div id="studentAssignmentList" class="bubble-grid"></div>
-    </div>
 
-    <div class="card step-card hidden timer-area" id="step-timing">
-      <h2>3. Timing</h2>
+async function loadWaveSummary() {
+  if (!sessionId) {
+    alert("No session ID yet. Save wave assignments first.");
+    return;
+  }
 
-      <div class="form-grid">
-        <div>
-          <label>Current Wave</label>
-          <select id="waveSelect" onchange="prepareWaveButtons()">
-            <option value="Wave 1">Wave 1</option>
-            <option value="Wave 2">Wave 2</option>
-          </select>
-        </div>
+  const wave = document.getElementById("waveSelect").value;
 
-        <div>
-          <button class="primary-btn" onclick="startWave()">Start Wave</button>
-        </div>
+  const result = await callBackend({
+    action: "getRunWaveSummary",
+    sessionId: sessionId,
+    wave: wave
+  });
 
-        <div>
-          <button class="danger-btn" onclick="endWave()">End Wave</button>
-        </div>
-      </div>
+  if (!result.success) {
+    alert("Failed to load summary: " + result.error);
+    return;
+  }
 
-      <div class="timer-display" id="timerDisplay">00:00</div>
+  const table = document.getElementById("summaryTable");
+  const tbody = document.getElementById("summaryBody");
 
-      <p class="status" id="timerStatus"></p>
+  tbody.innerHTML = "";
 
-      <div class="save-status-box">
-        <strong>Save Queue:</strong>
-        <span id="queueStatus">No pending saves.</span>
-      </div>
+  result.results.forEach(row => {
+    const tr = document.createElement("tr");
 
-      <div class="runner-grid" id="runnerButtons"></div>
-    </div>
+    tr.innerHTML = `
+      <td>${row.No}</td>
+      <td>${row.Name}</td>
+      <td>${row.Time || ""}</td>
+      <td>${row.TimeSeconds || ""}</td>
+      <td>${row.Grade || ""}</td>
+      <td>${row.Status || ""}</td>
+      <td>${row.Remarks || ""}</td>
+    `;
 
-    <div class="card step-card hidden" id="step-review">
-      <h2>4. Review Remaining Pupils</h2>
-      <p>After ending a wave, pupils without timing will appear here.</p>
+    tbody.appendChild(tr);
+  });
 
-      <div id="remainingList"></div>
+  table.style.display = "table";
+}
 
-      <h2>Wave Summary</h2>
 
-      <button class="secondary-btn" onclick="loadWaveSummary()">
-        Refresh Wave Summary
-      </button>
+function secondsToTimeText(seconds) {
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
 
-      <table id="summaryTable" style="display:none;">
-        <thead>
-          <tr>
-            <th>No</th>
-            <th>Name</th>
-            <th>Time</th>
-            <th>Seconds</th>
-            <th>Grade</th>
-            <th>Status</th>
-            <th>Remarks</th>
-          </tr>
-        </thead>
-        <tbody id="summaryBody"></tbody>
-      </table>
-    </div>
-  </div>
+  return String(minutes).padStart(2, "0") + ":" +
+         String(remainingSeconds).padStart(2, "0");
+}
 
-  <script src="run-timing.js"></script>
-</body>
-</html>
+
+function clearRunPage() {
+  allStudents = [];
+  sessionId = "";
+  waveStartTime = null;
+  finishedStudentIds = new Set();
+  saveQueue = [];
+  isSavingQueue = false;
+  capturedResults = [];
+
+  if (timerInterval) {
+    clearInterval(timerInterval);
+  }
+
+  document.getElementById("studentAssignmentList").innerHTML = "";
+  document.getElementById("runnerButtons").innerHTML = "";
+  document.getElementById("remainingList").innerHTML = "";
+  document.getElementById("summaryBody").innerHTML = "";
+  document.getElementById("summaryTable").style.display = "none";
+  document.getElementById("timerDisplay").textContent = "00:00";
+  document.getElementById("timerStatus").textContent = "";
+
+  updateWaveCounts();
+  updateQueueStatus();
+}
