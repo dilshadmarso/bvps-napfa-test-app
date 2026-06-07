@@ -123,15 +123,63 @@ async function loadRunStudents() {
     return;
   }
 
-  allStudents = result.students.map((student, index) => {
-    return {
-      ...student,
-      Wave: index % 2 === 0 ? "Wave 1" : "Wave 2",
-      RunStatus: index % 2 === 0 ? "Wave 1" : "Wave 2"
-    };
-  });
+  allStudents = result.students.map(student => {
+  return {
+    ...student,
+    Wave: "Wave 2",
+    RunStatus: "Wave 2"
+  };
+});
 
   renderWaveAssignments();
+
+  function handleNotRunningChange(index) {
+  const wave1Checkbox = document.getElementById(`wave1-${index}`);
+  const notRunningCheckbox = document.getElementById(`notrunning-${index}`);
+
+  if (notRunningCheckbox.checked) {
+    wave1Checkbox.checked = false;
+    wave1Checkbox.disabled = true;
+  } else {
+    wave1Checkbox.disabled = false;
+  }
+
+  async function saveWaveAssignments() {
+  assignSelectedToWave1();
+
+  const testDate = document.getElementById("testDate").value;
+  const className = document.getElementById("classSelect").value;
+}
+
+
+function assignSelectedToWave1() {
+  allStudents.forEach((student, index) => {
+    const wave1Checkbox = document.getElementById(`wave1-${index}`);
+    const notRunningCheckbox = document.getElementById(`notrunning-${index}`);
+    const assignedText = document.getElementById(`assigned-${index}`);
+
+    if (!wave1Checkbox || !notRunningCheckbox) {
+      return;
+    }
+
+    if (notRunningCheckbox.checked) {
+      student.Wave = "Not Running";
+      student.RunStatus = "Not Running";
+    } else if (wave1Checkbox.checked) {
+      student.Wave = "Wave 1";
+      student.RunStatus = "Wave 1";
+    } else {
+      student.Wave = "Wave 2";
+      student.RunStatus = "Wave 2";
+    }
+
+    if (assignedText) {
+      assignedText.textContent = "Assigned: " + student.Wave;
+    }
+  });
+
+  prepareWaveButtons();
+}
 
   document.getElementById("setupStatus").textContent =
     `${allStudents.length} students loaded.`;
@@ -163,17 +211,6 @@ function renderWaveAssignments() {
 
   prepareWaveButtons();
 }
-
-
-function updateStudentWave(index) {
-  const selectedWave = document.getElementById(`wave-${index}`).value;
-
-  allStudents[index].Wave = selectedWave;
-  allStudents[index].RunStatus = selectedWave;
-
-  prepareWaveButtons();
-}
-
 
 async function saveWaveAssignments() {
   const testDate = document.getElementById("testDate").value;
