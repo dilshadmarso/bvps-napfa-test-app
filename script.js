@@ -1,4 +1,4 @@
-const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyO5Q72jWSk3ibg16_Whwht_klXnUvfmno73Is2v-cbWNDW9WavTv_4eCs74YAyrLBx/exec";
+const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec";
 
 async function uploadCockpitCsv() {
   const fileInput = document.getElementById("csvFile");
