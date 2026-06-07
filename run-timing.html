@@ -528,26 +528,45 @@
         Back to Timing
       </button>
 
-      <h2>Wave Summary</h2>
+<h2>Wave Results</h2>
 
-      <button class="secondary-btn" onclick="loadWaveSummary()">
-        Refresh Wave Summary
-      </button>
+<button class="secondary-btn" onclick="loadAllWaveSummaries()">
+  Refresh Wave 1 and Wave 2 Results
+</button>
 
-      <table id="summaryTable" style="display:none;">
-        <thead>
-          <tr>
-            <th>No</th>
-            <th>Name</th>
-            <th>Time</th>
-            <th>Seconds</th>
-            <th>Grade</th>
-            <th>Status</th>
-            <th>Remarks</th>
-          </tr>
-        </thead>
-        <tbody id="summaryBody"></tbody>
-      </table>
+<h3>Wave 1 Results</h3>
+<table id="wave1SummaryTable" style="display:none;">
+  <thead>
+    <tr>
+      <th>Pos</th>
+      <th>No</th>
+      <th>Name</th>
+      <th>Time</th>
+      <th>Seconds</th>
+      <th>Grade</th>
+      <th>Status</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody id="wave1SummaryBody"></tbody>
+</table>
+
+<h3>Wave 2 Results</h3>
+<table id="wave2SummaryTable" style="display:none;">
+  <thead>
+    <tr>
+      <th>Pos</th>
+      <th>No</th>
+      <th>Name</th>
+      <th>Time</th>
+      <th>Seconds</th>
+      <th>Grade</th>
+      <th>Status</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody id="wave2SummaryBody"></tbody>
+</table>
     </div>
   </div>
 
