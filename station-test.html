@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BVPS NAPFA 5-Station Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 15px;
+    }
+
+    select, input, button {
+      padding: 8px;
+      margin-top: 5px;
+      font-size: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+
+    th {
+      background: #f2f2f2;
+    }
+
+    .score-input {
+      width: 90px;
+    }
+
+    .save-btn {
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>BVPS NAPFA 5-Station Test</h1>
+
+  <label>Tester Name</label>
+  <input type="text" id="testerName" placeholder="Enter tester name">
+
+  <label>Test Date</label>
+  <input type="date" id="testDate">
+
+  <label>Level</label>
+  <select id="levelSelect" onchange="loadClasses()">
+    <option value="">Select level</option>
+  </select>
+
+  <label>Class</label>
+  <select id="classSelect" onchange="loadGroups()">
+    <option value="">Select class</option>
+  </select>
+
+  <label>Group</label>
+  <select id="groupSelect" onchange="loadStudents()">
+    <option value="">Select group</option>
+  </select>
+
+  <label>Station</label>
+  <select id="stationSelect">
+    <option value="">Select station</option>
+  </select>
+
+  <p id="status"></p>
+
+  <table id="studentsTable" style="display:none;">
+    <thead>
+      <tr>
+        <th>No</th>
+        <th>Name</th>
+        <th>Gender</th>
+        <th>DOB</th>
+        <th>Score</th>
+        <th>Save</th>
+      </tr>
+    </thead>
+    <tbody id="studentsTableBody"></tbody>
+  </table>
+
+  <script src="station-test.js"></script>
+</body>
+</html>
