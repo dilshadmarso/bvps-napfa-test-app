@@ -22,6 +22,29 @@ window.onload = async function () {
 };
 
 
+function showLoading(message) {
+  const overlay = document.getElementById("loadingOverlay");
+  const text = document.getElementById("loadingText");
+
+  if (text) {
+    text.textContent = message || "Loading...";
+  }
+
+  if (overlay) {
+    overlay.classList.remove("hidden");
+  }
+}
+
+
+function hideLoading() {
+  const overlay = document.getElementById("loadingOverlay");
+
+  if (overlay) {
+    overlay.classList.add("hidden");
+  }
+}
+
+
 function setupCloseWarning() {
   window.addEventListener("beforeunload", function (event) {
     if (hasUnsafePendingWork()) {
@@ -55,10 +78,10 @@ function showStep(stepName) {
 
 
 function setTodayDate() {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
 
   document.getElementById("testDate").value = `${yyyy}-${mm}-${dd}`;
 }
@@ -80,6 +103,8 @@ async function callBackend(payload) {
 async function loadLevels() {
   const status = document.getElementById("setupStatus");
   status.textContent = "Loading levels...";
+
+  showLoading("Loading levels...");
 
   try {
     const result = await callBackend({
@@ -106,6 +131,8 @@ async function loadLevels() {
   } catch (error) {
     console.error(error);
     status.textContent = "Failed to load levels: " + error.message;
+  } finally {
+    hideLoading();
   }
 }
 
@@ -119,25 +146,32 @@ async function loadClasses() {
 
   if (!level) return;
 
-  const result = await callBackend({
-    action: "getClasses",
-    level: level
-  });
+  showLoading("Loading classes...");
 
-  if (!result.success) {
-    document.getElementById("setupStatus").textContent =
-      "Failed to load classes: " + result.error;
-    return;
+  try {
+    const result = await callBackend({
+      action: "getClasses",
+      level: level
+    });
+
+    if (!result.success) {
+      document.getElementById("setupStatus").textContent =
+        "Failed to load classes: " + result.error;
+      return;
+    }
+
+    result.classes.forEach(className => {
+      const option = document.createElement("option");
+      option.value = className;
+      option.textContent = className;
+      classSelect.appendChild(option);
+    });
+
+    document.getElementById("setupStatus").textContent = "Classes loaded.";
+
+  } finally {
+    hideLoading();
   }
-
-  result.classes.forEach(className => {
-    const option = document.createElement("option");
-    option.value = className;
-    option.textContent = className;
-    classSelect.appendChild(option);
-  });
-
-  document.getElementById("setupStatus").textContent = "Classes loaded.";
 }
 
 
@@ -149,32 +183,38 @@ async function loadRunStudents() {
   if (!className) return;
 
   document.getElementById("setupStatus").textContent = "Loading students...";
+  showLoading("Loading students...");
 
-  const result = await callBackend({
-    action: "getRunStudentsByClass",
-    className: className
-  });
+  try {
+    const result = await callBackend({
+      action: "getRunStudentsByClass",
+      className: className
+    });
 
-  if (!result.success) {
+    if (!result.success) {
+      document.getElementById("setupStatus").textContent =
+        "Failed to load students: " + result.error;
+      return;
+    }
+
+    allStudents = result.students.map(student => {
+      return {
+        ...student,
+        Wave: "Wave 2",
+        RunStatus: "Wave 2"
+      };
+    });
+
+    sessionId = `${className}-RUN-${document.getElementById("testDate").value}`;
+
+    renderWaveAssignments();
+
     document.getElementById("setupStatus").textContent =
-      "Failed to load students: " + result.error;
-    return;
+      `${allStudents.length} students loaded. Go to Wave 1 selection.`;
+
+  } finally {
+    hideLoading();
   }
-
-  allStudents = result.students.map(student => {
-    return {
-      ...student,
-      Wave: "Wave 2",
-      RunStatus: "Wave 2"
-    };
-  });
-
-  sessionId = `${className}-RUN-${document.getElementById("testDate").value}`;
-
-  renderWaveAssignments();
-
-  document.getElementById("setupStatus").textContent =
-    `${allStudents.length} students loaded. Go to Wave 1 selection.`;
 }
 
 
@@ -282,34 +322,41 @@ async function saveWaveAssignments() {
 
   sessionId = `${className}-RUN-${testDate}`;
 
-  const result = await callBackend({
-    action: "saveRunSession",
-    sessionId: sessionId,
-    testDate: testDate,
-    className: className,
-    mode: "1.6km Run",
-    students: allStudents.map(student => ({
-      No: student.No,
-      ID: student.ID,
-      Name: student.Name,
-      Wave: student.Wave,
-      RunStatus: student.RunStatus
-    }))
-  });
+  showLoading("Saving wave assignments...");
 
-  if (result.success) {
-    document.getElementById("setupStatus").textContent =
-      `Wave assignments saved. Session ID: ${result.sessionId}`;
+  try {
+    const result = await callBackend({
+      action: "saveRunSession",
+      sessionId: sessionId,
+      testDate: testDate,
+      className: className,
+      mode: "1.6km Run",
+      students: allStudents.map(student => ({
+        No: student.No,
+        ID: student.ID,
+        Name: student.Name,
+        Wave: student.Wave,
+        RunStatus: student.RunStatus
+      }))
+    });
 
-    alert("Wave assignments saved.");
-    showStep("timing");
-    prepareWaveButtons();
+    if (result.success) {
+      document.getElementById("setupStatus").textContent =
+        `Wave assignments saved. Session ID: ${result.sessionId}`;
 
-  } else {
-    document.getElementById("setupStatus").textContent =
-      "Failed to save wave assignments: " + result.error;
+      alert("Wave assignments saved.");
+      showStep("timing");
+      prepareWaveButtons();
 
-    alert("Failed to save wave assignments: " + result.error);
+    } else {
+      document.getElementById("setupStatus").textContent =
+        "Failed to save wave assignments: " + result.error;
+
+      alert("Failed to save wave assignments: " + result.error);
+    }
+
+  } finally {
+    hideLoading();
   }
 }
 
@@ -830,23 +877,30 @@ async function markRemainingStatus(studentId, index) {
   const className = document.getElementById("classSelect").value;
   const wave = document.getElementById("waveSelect").value;
 
-  const result = await callBackend({
-    action: "markRunStatus",
-    sessionId: sessionId,
-    testDate: testDate,
-    className: className,
-    wave: wave,
-    student: student,
-    status: status,
-    remarks: "",
-    attemptNo: 1
-  });
+  showLoading("Saving status...");
 
-  if (result.success) {
-    alert(`${student.Name} marked as ${status}.`);
-    loadAllWaveSummaries();
-  } else {
-    alert("Failed to mark status: " + result.error);
+  try {
+    const result = await callBackend({
+      action: "markRunStatus",
+      sessionId: sessionId,
+      testDate: testDate,
+      className: className,
+      wave: wave,
+      student: student,
+      status: status,
+      remarks: "",
+      attemptNo: 1
+    });
+
+    if (result.success) {
+      alert(`${student.Name} marked as ${status}.`);
+      loadAllWaveSummaries();
+    } else {
+      alert("Failed to mark status: " + result.error);
+    }
+
+  } finally {
+    hideLoading();
   }
 }
 
@@ -878,8 +932,14 @@ async function loadAllWaveSummaries() {
     return;
   }
 
-  await loadSpecificWaveSummary("Wave 1", "wave1SummaryTable", "wave1SummaryBody");
-  await loadSpecificWaveSummary("Wave 2", "wave2SummaryTable", "wave2SummaryBody");
+  showLoading("Loading wave results...");
+
+  try {
+    await loadSpecificWaveSummary("Wave 1", "wave1SummaryTable", "wave1SummaryBody");
+    await loadSpecificWaveSummary("Wave 2", "wave2SummaryTable", "wave2SummaryBody");
+  } finally {
+    hideLoading();
+  }
 }
 
 
@@ -939,7 +999,6 @@ async function loadSpecificWaveSummary(wave, tableId, bodyId) {
 }
 
 
-// Keep this for older calls
 async function loadWaveSummary() {
   await loadAllWaveSummaries();
 }
@@ -1015,19 +1074,24 @@ async function retryPendingSavesFromStorage() {
     return;
   }
 
-  for (const item of stored) {
-    try {
-      const result = await callBackend(item.payload);
+  showLoading("Retrying unsaved timings...");
 
-      if (result.success) {
-        removeStoredPendingSave(item.queueId);
+  try {
+    for (const item of stored) {
+      try {
+        const result = await callBackend(item.payload);
+
+        if (result.success) {
+          removeStoredPendingSave(item.queueId);
+        }
+      } catch (error) {
+        console.error("Retry save failed:", error);
       }
-    } catch (error) {
-      console.error("Retry save failed:", error);
     }
+  } finally {
+    hideLoading();
+    updateQueueStatus();
   }
-
-  updateQueueStatus();
 }
 
 
