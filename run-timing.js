@@ -1,91 +1,103 @@
-const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec";
+const GOOGLE_APPS_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
 
-let allStudents = [];
-let sessionId = "";
-let waveStartTime = null;
-let timerInterval = null;
-let finishedStudentIds = new Set();
+const PENDING_SAVE_STORAGE_KEY = "BVPS_NAPFA_RUN_PENDING_SAVES_V2";
 
-let saveQueue = [];
-let isSavingQueue = false;
-let capturedResults = [];
-let finishCounter = 0;
-
-const PENDING_SAVE_KEY = "BVPS_NAPFA_PENDING_RUN_SAVES";
-
-
-window.onload = async function () {
-  setTodayDate();
-  setupCloseWarning();
-  await loadLevels();
-  await retryPendingSavesFromStorage();
+const STATUS = {
+  UNASSIGNED: "Unassigned",
+  WAVE_1: "Wave 1",
+  WAVE_2: "Wave 2",
+  NOT_RUNNING: "Not Running"
 };
 
+let students = [];
+let sessionId = "";
+let currentWave = "Wave 1";
 
-function showLoading(message) {
-  const overlay = document.getElementById("loadingOverlay");
-  const text = document.getElementById("loadingText");
+let waveStartPerformanceTime = null;
+let timerInterval = null;
 
-  if (text) {
-    text.textContent = message || "Loading...";
-  }
+let finishRecords = [];
+let finishPositionCounter = 0;
 
-  if (overlay) {
-    overlay.classList.remove("hidden");
-  }
-}
+let saveQueue = [];
+let saveQueueRunning = false;
+let cancelledQueueIds = new Set();
 
+let assignmentTapTrackers = {};
+let currentReviewWave = "Wave 1";
 
-function hideLoading() {
-  const overlay = document.getElementById("loadingOverlay");
-
-  if (overlay) {
-    overlay.classList.add("hidden");
-  }
-}
+window.addEventListener("load", initialisePage);
 
 
-function setupCloseWarning() {
-  window.addEventListener("beforeunload", function (event) {
-    if (hasUnsafePendingWork()) {
-      event.preventDefault();
-      event.returnValue = "";
-      return "";
-    }
-  });
-}
+/* =====================================================
+   INITIALISATION
+===================================================== */
 
+async function initialisePage() {
+  setTodayDate();
+  installCloseWarning();
 
-function hasUnsafePendingWork() {
-  return waveStartTime !== null ||
-         saveQueue.length > 0 ||
-         isSavingQueue ||
-         getStoredPendingSaves().length > 0;
-}
-
-
-function showStep(stepName) {
-  const steps = ["setup", "assign", "timing", "review"];
-
-  steps.forEach(step => {
-    document.getElementById(`step-${step}`).classList.add("hidden");
-    document.getElementById(`tab-${step}`).classList.remove("active");
-  });
-
-  document.getElementById(`step-${stepName}`).classList.remove("hidden");
-  document.getElementById(`tab-${stepName}`).classList.add("active");
+  await loadLevels();
+  await retryStoredPendingSaves();
 }
 
 
 function setTodayDate() {
   const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
 
-  document.getElementById("testDate").value = `${yyyy}-${mm}-${dd}`;
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  document.getElementById("testDate").value =
+    `${year}-${month}-${day}`;
 }
 
+
+function installCloseWarning() {
+  window.addEventListener("beforeunload", event => {
+    if (hasUnsafeWork()) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+  });
+}
+
+
+function hasUnsafeWork() {
+  return (
+    waveStartPerformanceTime !== null ||
+    saveQueue.length > 0 ||
+    saveQueueRunning ||
+    readStoredPendingSaves().length > 0
+  );
+}
+
+
+/* =====================================================
+   LOADING OVERLAY
+===================================================== */
+
+function showLoading(message) {
+  document.getElementById("loadingText").textContent =
+    message || "Loading...";
+
+  document
+    .getElementById("loadingOverlay")
+    .classList.remove("hidden");
+}
+
+
+function hideLoading() {
+  document
+    .getElementById("loadingOverlay")
+    .classList.add("hidden");
+}
+
+
+/* =====================================================
+   BACKEND
+===================================================== */
 
 async function callBackend(payload) {
   const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
@@ -93,17 +105,86 @@ async function callBackend(payload) {
     body: JSON.stringify(payload)
   });
 
-  const text = await response.text();
-  console.log("Raw backend response:", text);
+  const rawText = await response.text();
 
-  return JSON.parse(text);
+  let result;
+
+  try {
+    result = JSON.parse(rawText);
+  } catch (error) {
+    throw new Error("Backend returned an invalid response.");
+  }
+
+  return result;
 }
 
 
-async function loadLevels() {
-  const status = document.getElementById("setupStatus");
-  status.textContent = "Loading levels...";
+/* =====================================================
+   PROGRESS / PAGE NAVIGATION
+===================================================== */
 
+function showOnlySection(sectionId) {
+  const sections = [
+    "stepSetup",
+    "stepWave1Assignment",
+    "stepWave2Assignment",
+    "stepTiming",
+    "stepWaveReview",
+    "stepFinalReview"
+  ];
+
+  sections.forEach(id => {
+    document.getElementById(id).classList.add("hidden");
+  });
+
+  document.getElementById(sectionId).classList.remove("hidden");
+
+  window.scrollTo({
+    top: 0,
+    behaviour: "smooth"
+  });
+}
+
+
+function updateProgress(stage) {
+  const setup = document.getElementById("progressSetup");
+  const assign = document.getElementById("progressAssign");
+  const run = document.getElementById("progressRun");
+  const review = document.getElementById("progressReview");
+
+  [setup, assign, run, review].forEach(item => {
+    item.classList.remove("active", "done");
+  });
+
+  if (stage === "setup") {
+    setup.classList.add("active");
+  }
+
+  if (stage === "assign") {
+    setup.classList.add("done");
+    assign.classList.add("active");
+  }
+
+  if (stage === "run") {
+    setup.classList.add("done");
+    assign.classList.add("done");
+    run.classList.add("active");
+  }
+
+  if (stage === "review") {
+    setup.classList.add("done");
+    assign.classList.add("done");
+    run.classList.add("done");
+    review.classList.add("active");
+  }
+}
+
+
+/* =====================================================
+   SETUP
+===================================================== */
+
+async function loadLevels() {
   showLoading("Loading levels...");
 
   try {
@@ -112,25 +193,30 @@ async function loadLevels() {
     });
 
     if (!result.success) {
-      status.textContent = "Failed to load levels: " + result.error;
-      return;
+      throw new Error(result.error || "Unable to load levels.");
     }
 
-    const levelSelect = document.getElementById("levelSelect");
-    levelSelect.innerHTML = `<option value="">Select level</option>`;
+    const select = document.getElementById("levelSelect");
+
+    select.innerHTML =
+      `<option value="">Select level</option>`;
 
     result.levels.forEach(level => {
       const option = document.createElement("option");
+
       option.value = level;
       option.textContent = level;
-      levelSelect.appendChild(option);
+
+      select.appendChild(option);
     });
 
-    status.textContent = "Levels loaded.";
+    document.getElementById("setupMessage").textContent =
+      "Levels loaded.";
 
   } catch (error) {
-    console.error(error);
-    status.textContent = "Failed to load levels: " + error.message;
+    document.getElementById("setupMessage").textContent =
+      "Failed to load levels: " + error.message;
+
   } finally {
     hideLoading();
   }
@@ -141,33 +227,42 @@ async function loadClasses() {
   const level = document.getElementById("levelSelect").value;
   const classSelect = document.getElementById("classSelect");
 
-  classSelect.innerHTML = `<option value="">Select class</option>`;
-  clearRunPage();
+  classSelect.innerHTML =
+    `<option value="">Select class</option>`;
 
-  if (!level) return;
+  resetSessionState();
+
+  if (!level) {
+    return;
+  }
 
   showLoading("Loading classes...");
 
   try {
     const result = await callBackend({
       action: "getClasses",
-      level: level
+      level
     });
 
     if (!result.success) {
-      document.getElementById("setupStatus").textContent =
-        "Failed to load classes: " + result.error;
-      return;
+      throw new Error(result.error || "Unable to load classes.");
     }
 
     result.classes.forEach(className => {
       const option = document.createElement("option");
+
       option.value = className;
       option.textContent = className;
+
       classSelect.appendChild(option);
     });
 
-    document.getElementById("setupStatus").textContent = "Classes loaded.";
+    document.getElementById("setupMessage").textContent =
+      "Classes loaded.";
+
+  } catch (error) {
+    document.getElementById("setupMessage").textContent =
+      "Failed to load classes: " + error.message;
 
   } finally {
     hideLoading();
@@ -175,42 +270,47 @@ async function loadClasses() {
 }
 
 
-async function loadRunStudents() {
-  const className = document.getElementById("classSelect").value;
+async function loadStudents() {
+  const className =
+    document.getElementById("classSelect").value;
 
-  clearRunPage();
+  resetSessionState();
 
-  if (!className) return;
+  if (!className) {
+    return;
+  }
 
-  document.getElementById("setupStatus").textContent = "Loading students...";
-  showLoading("Loading students...");
+  showLoading("Loading pupils...");
 
   try {
     const result = await callBackend({
       action: "getRunStudentsByClass",
-      className: className
+      className
     });
 
     if (!result.success) {
-      document.getElementById("setupStatus").textContent =
-        "Failed to load students: " + result.error;
-      return;
+      throw new Error(result.error || "Unable to load pupils.");
     }
 
-    allStudents = result.students.map(student => {
-      return {
-        ...student,
-        Wave: "Wave 2",
-        RunStatus: "Wave 2"
-      };
-    });
+    students = result.students.map(student => ({
+      ...student,
+      RunAssignment: STATUS.UNASSIGNED,
+      RunStatus: STATUS.UNASSIGNED,
+      NotRunningReason: ""
+    }));
 
-    sessionId = `${className}-RUN-${document.getElementById("testDate").value}`;
+    const testDate =
+      document.getElementById("testDate").value;
 
-    renderWaveAssignments();
+    sessionId =
+      `${className}-RUN-${testDate}`;
 
-    document.getElementById("setupStatus").textContent =
-      `${allStudents.length} students loaded. Go to Wave 1 selection.`;
+    document.getElementById("setupMessage").textContent =
+      `${students.length} pupils loaded.`;
+
+  } catch (error) {
+    document.getElementById("setupMessage").textContent =
+      "Failed to load pupils: " + error.message;
 
   } finally {
     hideLoading();
@@ -218,142 +318,246 @@ async function loadRunStudents() {
 }
 
 
-function renderWaveAssignments() {
-  const container = document.getElementById("studentAssignmentList");
-  container.innerHTML = "";
+function goToWave1Selection() {
+  if (students.length === 0) {
+    alert("Please select a class and load pupils first.");
+    return;
+  }
 
-  allStudents.forEach((student, index) => {
-    const bubble = document.createElement("div");
-    bubble.className = "student-bubble blank";
-    bubble.id = `student-bubble-${index}`;
+  renderWave1Assignment();
+  showOnlySection("stepWave1Assignment");
+  updateProgress("assign");
+}
 
-    bubble.onclick = function () {
-      toggleWave1(index);
+
+/* =====================================================
+   ASSIGNMENT TAP HANDLING
+===================================================== */
+
+function registerAssignmentTap(studentIndex, phase) {
+  const trackerKey = `${phase}-${studentIndex}`;
+
+  if (!assignmentTapTrackers[trackerKey]) {
+    assignmentTapTrackers[trackerKey] = {
+      count: 0,
+      timer: null
     };
+  }
 
-    bubble.innerHTML = `
-      <span class="reg-no">${student.No}</span>
-      <span class="student-name">${student.Name}</span>
-      <span class="bubble-status">Wave 2</span>
-    `;
+  const tracker = assignmentTapTrackers[trackerKey];
 
-    container.appendChild(bubble);
+  tracker.count += 1;
+
+  if (tracker.timer) {
+    clearTimeout(tracker.timer);
+  }
+
+  if (tracker.count >= 3) {
+    tracker.count = 0;
+    tracker.timer = null;
+
+    handleTripleTap(studentIndex, phase);
+    return;
+  }
+
+  tracker.timer = setTimeout(() => {
+    const count = tracker.count;
+
+    tracker.count = 0;
+    tracker.timer = null;
+
+    if (count === 1) {
+      handleSingleTap(studentIndex, phase);
+    }
+  }, 430);
+}
+
+
+function handleSingleTap(studentIndex, phase) {
+  const student = students[studentIndex];
+
+  if (student.RunAssignment === STATUS.NOT_RUNNING) {
+    return;
+  }
+
+  if (phase === "wave1") {
+    student.RunAssignment =
+      student.RunAssignment === STATUS.WAVE_1
+        ? STATUS.UNASSIGNED
+        : STATUS.WAVE_1;
+  }
+
+  if (phase === "wave2") {
+    student.RunAssignment =
+      student.RunAssignment === STATUS.WAVE_2
+        ? STATUS.UNASSIGNED
+        : STATUS.WAVE_2;
+  }
+
+  student.RunStatus = student.RunAssignment;
+
+  if (phase === "wave1") {
+    renderWave1Assignment();
+  } else {
+    renderWave2Assignment();
+  }
+}
+
+
+function handleTripleTap(studentIndex, phase) {
+  const student = students[studentIndex];
+
+  if (student.RunAssignment === STATUS.NOT_RUNNING) {
+    student.RunAssignment = STATUS.UNASSIGNED;
+    student.RunStatus = STATUS.UNASSIGNED;
+  } else {
+    student.RunAssignment = STATUS.NOT_RUNNING;
+    student.RunStatus = STATUS.NOT_RUNNING;
+  }
+
+  if (phase === "wave1") {
+    renderWave1Assignment();
+  } else {
+    renderWave2Assignment();
+  }
+}
+
+
+/* =====================================================
+   WAVE 1 ASSIGNMENT
+===================================================== */
+
+function renderWave1Assignment() {
+  const grid =
+    document.getElementById("wave1AssignmentGrid");
+
+  grid.innerHTML = "";
+
+  students.forEach((student, index) => {
+    const circle =
+      createAssignmentCircle(student, index, "wave1");
+
+    grid.appendChild(circle);
   });
 
-  updateAllBubbleStyles();
-  updateWaveCounts();
-  prepareWaveButtons();
+  updateAssignmentCounts();
 }
 
 
-function toggleWave1(index) {
-  const student = allStudents[index];
+function confirmWave1Selection() {
+  const selected =
+    students.filter(
+      student =>
+        student.RunAssignment === STATUS.WAVE_1
+    );
 
-  if (student.Wave === "Wave 1") {
-    student.Wave = "Wave 2";
-    student.RunStatus = "Wave 2";
-  } else {
-    student.Wave = "Wave 1";
-    student.RunStatus = "Wave 1";
+  if (selected.length === 0) {
+    alert("Please select at least one pupil for Wave 1.");
+    return;
   }
 
-  updateBubbleStyle(index);
-  updateWaveCounts();
-  prepareWaveButtons();
+  renderWave2Assignment();
+  showOnlySection("stepWave2Assignment");
 }
 
 
-function updateAllBubbleStyles() {
-  allStudents.forEach((student, index) => {
-    updateBubbleStyle(index);
+function returnToWave1Selection() {
+  renderWave1Assignment();
+  showOnlySection("stepWave1Assignment");
+}
+
+
+/* =====================================================
+   WAVE 2 ASSIGNMENT
+===================================================== */
+
+function renderWave2Assignment() {
+  const grid =
+    document.getElementById("wave2AssignmentGrid");
+
+  grid.innerHTML = "";
+
+  students.forEach((student, index) => {
+    if (student.RunAssignment === STATUS.WAVE_1) {
+      return;
+    }
+
+    const circle =
+      createAssignmentCircle(student, index, "wave2");
+
+    grid.appendChild(circle);
   });
+
+  updateAssignmentCounts();
 }
 
 
-function updateBubbleStyle(index) {
-  const student = allStudents[index];
-  const bubble = document.getElementById(`student-bubble-${index}`);
+async function confirmAllAssignments() {
+  const unassigned =
+    students.filter(
+      student =>
+        student.RunAssignment === STATUS.UNASSIGNED
+    );
 
-  if (!bubble) return;
+  if (unassigned.length > 0) {
+    alert(
+      `${unassigned.length} pupil(s) are still unassigned. ` +
+      "Assign them to Wave 2 or triple-tap to mark Not Running."
+    );
 
-  bubble.classList.remove("wave1", "blank");
-
-  if (student.Wave === "Wave 1") {
-    bubble.classList.add("wave1");
-  } else {
-    bubble.classList.add("blank");
-  }
-
-  const status = bubble.querySelector(".bubble-status");
-
-  if (status) {
-    status.textContent = student.Wave === "Wave 1" ? "Wave 1" : "Wave 2";
-  }
-}
-
-
-function updateWaveCounts() {
-  const wave1Count = allStudents.filter(s => s.Wave === "Wave 1").length;
-  const wave2Count = allStudents.filter(s => s.Wave === "Wave 2").length;
-
-  document.getElementById("wave1Count").textContent = wave1Count;
-  document.getElementById("wave2Count").textContent = wave2Count;
-}
-
-
-async function saveWaveAssignments() {
-  const testDate = document.getElementById("testDate").value;
-  const className = document.getElementById("classSelect").value;
-
-  if (!testDate) {
-    alert("Please select test date.");
     return;
   }
 
-  if (!className) {
-    alert("Please select class.");
-    return;
+  const wave2Pupils =
+    students.filter(
+      student =>
+        student.RunAssignment === STATUS.WAVE_2
+    );
+
+  if (wave2Pupils.length === 0) {
+    const continueWithoutWave2 = confirm(
+      "No pupils are assigned to Wave 2. Continue with only Wave 1?"
+    );
+
+    if (!continueWithoutWave2) {
+      return;
+    }
   }
 
-  if (allStudents.length === 0) {
-    alert("No students loaded.");
-    return;
-  }
-
-  sessionId = `${className}-RUN-${testDate}`;
-
-  showLoading("Saving wave assignments...");
+  showLoading("Saving run assignments...");
 
   try {
+    const testDate =
+      document.getElementById("testDate").value;
+
+    const className =
+      document.getElementById("classSelect").value;
+
     const result = await callBackend({
       action: "saveRunSession",
-      sessionId: sessionId,
-      testDate: testDate,
-      className: className,
+      sessionId,
+      testDate,
+      className,
       mode: "1.6km Run",
-      students: allStudents.map(student => ({
+      students: students.map(student => ({
         No: student.No,
         ID: student.ID,
         Name: student.Name,
-        Wave: student.Wave,
+        Wave: student.RunAssignment,
         RunStatus: student.RunStatus
       }))
     });
 
-    if (result.success) {
-      document.getElementById("setupStatus").textContent =
-        `Wave assignments saved. Session ID: ${result.sessionId}`;
-
-      alert("Wave assignments saved.");
-      showStep("timing");
-      prepareWaveButtons();
-
-    } else {
-      document.getElementById("setupStatus").textContent =
-        "Failed to save wave assignments: " + result.error;
-
-      alert("Failed to save wave assignments: " + result.error);
+    if (!result.success) {
+      throw new Error(
+        result.error || "Unable to save assignments."
+      );
     }
+
+    prepareWaveForTiming("Wave 1");
+
+  } catch (error) {
+    alert("Unable to save assignments: " + error.message);
 
   } finally {
     hideLoading();
@@ -361,765 +565,1250 @@ async function saveWaveAssignments() {
 }
 
 
-function prepareWaveButtons() {
-  const wave = document.getElementById("waveSelect").value;
-  const container = document.getElementById("runnerButtons");
+function createAssignmentCircle(student, index, phase) {
+  const circle = document.createElement("div");
 
-  container.innerHTML = "";
+  circle.className =
+    "assignment-circle " +
+    assignmentClass(student.RunAssignment);
 
-  const alreadyCapturedIds = new Set(
-    capturedResults
-      .filter(result => result.wave === wave)
-      .map(result => String(result.studentId))
-  );
-
-  finishedStudentIds = new Set(alreadyCapturedIds);
-
-  const waveStudents = allStudents.filter(student => student.Wave === wave);
-
-  waveStudents.forEach(student => {
-    const button = document.createElement("button");
-    button.className = "runner-btn";
-    button.id = `runner-${student.ID}`;
-
-    const captured = capturedResults.find(result => {
-      return String(result.studentId) === String(student.ID) &&
-             result.wave === wave;
-    });
-
-    if (captured) {
-      button.classList.add(captured.saveFailed ? "save-failed" : "finished");
-      button.disabled = false;
-
-      button.innerHTML = `
-        <span class="runner-no">${student.No}</span>
-        ${student.Name}<br>
-        <strong>Pos ${captured.position}</strong> | ${captured.displayTime}<br>
-        ${captured.saved ? "Saved" : captured.saveFailed ? "Save failed" : "Captured"}
-        <br>
-        <button class="undo-mini-btn" onclick="undoFinish('${student.ID}', '${wave}'); event.stopPropagation();">
-          Undo
-        </button>
-      `;
-    } else {
-      button.onclick = function () {
-        recordFinish(student);
-      };
-
-      button.innerHTML = `
-        <span class="runner-no">${student.No}</span>
-        ${student.Name}
-      `;
-    }
-
-    container.appendChild(button);
+  circle.addEventListener("click", () => {
+    registerAssignmentTap(index, phase);
   });
 
-  document.getElementById("timerStatus").textContent =
-    `${waveStudents.length} pupils loaded for ${wave}.`;
+  circle.innerHTML = `
+    <div class="circle-no">${escapeHtml(student.No)}</div>
+    <div class="circle-name">${formatName(student.Name)}</div>
+    <div class="circle-state">
+      ${escapeHtml(student.RunAssignment)}
+    </div>
+  `;
 
-  renderRecentFinishes();
+  return circle;
 }
 
 
-function startWave() {
-  const className = document.getElementById("classSelect").value;
-
-  if (!className || allStudents.length === 0) {
-    alert("Please load a class first.");
-    return;
+function assignmentClass(assignment) {
+  if (assignment === STATUS.WAVE_1) {
+    return "selected-wave1";
   }
 
-  if (!sessionId) {
-    alert("Please save wave assignments first.");
-    return;
+  if (assignment === STATUS.WAVE_2) {
+    return "selected-wave2";
   }
 
-  const wave = document.getElementById("waveSelect").value;
-  const waveStudents = allStudents.filter(student => student.Wave === wave);
-
-  if (waveStudents.length === 0) {
-    alert("No pupils assigned to this wave.");
-    return;
+  if (assignment === STATUS.NOT_RUNNING) {
+    return "not-running";
   }
 
-  finishCounter = capturedResults.filter(result => result.wave === wave).length;
-
-  finishedStudentIds = new Set(
-    capturedResults
-      .filter(result => result.wave === wave)
-      .map(result => String(result.studentId))
-  );
-
-  waveStartTime = new Date();
-
-  if (timerInterval) {
-    clearInterval(timerInterval);
-  }
-
-  timerInterval = setInterval(updateTimerDisplay, 200);
-
-  document.getElementById("timerStatus").textContent =
-    `${wave} started. Tap pupils as they finish.`;
+  return "";
 }
 
 
-function updateTimerDisplay() {
-  if (!waveStartTime) return;
+function updateAssignmentCounts() {
+  const wave1Count =
+    students.filter(
+      student =>
+        student.RunAssignment === STATUS.WAVE_1
+    ).length;
 
-  const now = new Date();
-  const elapsedSeconds = Math.floor((now - waveStartTime) / 1000);
+  const wave2Count =
+    students.filter(
+      student =>
+        student.RunAssignment === STATUS.WAVE_2
+    ).length;
+
+  const unassignedCount =
+    students.filter(
+      student =>
+        student.RunAssignment === STATUS.UNASSIGNED
+    ).length;
+
+  const notRunningCount =
+    students.filter(
+      student =>
+        student.RunAssignment === STATUS.NOT_RUNNING
+    ).length;
+
+  document.getElementById("wave1Count").textContent =
+    wave1Count;
+
+  document.getElementById("wave2Count").textContent =
+    wave2Count;
+
+  document.getElementById("unassignedCount1").textContent =
+    unassignedCount;
+
+  document.getElementById("unassignedCount2").textContent =
+    unassignedCount;
+
+  document.getElementById("notRunningCount1").textContent =
+    notRunningCount;
+
+  document.getElementById("notRunningCount2").textContent =
+    notRunningCount;
+}
+
+
+/* =====================================================
+   TIMING
+===================================================== */
+
+function prepareWaveForTiming(wave) {
+  currentWave = wave;
+
+  waveStartPerformanceTime = null;
+  finishPositionCounter =
+    finishRecords.filter(record => record.wave === wave).length;
+
+  clearInterval(timerInterval);
+  timerInterval = null;
 
   document.getElementById("timerDisplay").textContent =
-    secondsToTimeText(elapsedSeconds);
+    "00:00";
+
+  document.getElementById("currentWaveLabel").textContent =
+    wave;
+
+  document.getElementById("startWaveButton").disabled =
+    false;
+
+  renderRunnerCircles();
+  renderRecentFinishes();
+  updateQueueMessage();
+
+  showOnlySection("stepTiming");
+  updateProgress("run");
 }
 
 
-function recordFinish(student) {
-  if (!waveStartTime) {
-    alert("Please start the wave first.");
+function getCurrentWaveStudents() {
+  return students.filter(
+    student =>
+      student.RunAssignment === currentWave
+  );
+}
+
+
+function renderRunnerCircles() {
+  const grid =
+    document.getElementById("runnerGrid");
+
+  grid.innerHTML = "";
+
+  const waveStudents = getCurrentWaveStudents();
+
+  document.getElementById("runnerCountLabel").textContent =
+    `${waveStudents.length} pupils`;
+
+  waveStudents.forEach(student => {
+    const item = document.createElement("div");
+    item.className = "runner-item";
+
+    const circle = document.createElement("div");
+    circle.className = "runner-circle";
+
+    const captured =
+      findFinishRecord(student.ID, currentWave);
+
+    if (captured) {
+      if (captured.saveState === "failed") {
+        circle.classList.add("failed");
+      } else if (captured.saveState === "saving") {
+        circle.classList.add("saving");
+      } else {
+        circle.classList.add("captured");
+      }
+
+      circle.innerHTML = `
+        <div class="circle-no">${escapeHtml(student.No)}</div>
+        <div class="runner-position">
+          POS ${escapeHtml(captured.position)}
+        </div>
+        <div class="runner-time">
+          ${escapeHtml(captured.displayTime)}
+        </div>
+      `;
+
+      circle.addEventListener("click", () => {
+        requestUndoFinish(student.ID, currentWave);
+      });
+
+    } else {
+      circle.innerHTML = `
+        <div class="circle-no">${escapeHtml(student.No)}</div>
+        <div class="circle-name">${formatName(student.Name)}</div>
+      `;
+
+      circle.addEventListener("click", () => {
+        captureFinish(student);
+      });
+    }
+
+    const nameLabel = document.createElement("div");
+    nameLabel.className = "runner-name-label";
+    nameLabel.innerHTML = formatName(student.Name);
+
+    item.appendChild(circle);
+    item.appendChild(nameLabel);
+
+    grid.appendChild(item);
+  });
+}
+
+
+function startCurrentWave() {
+  if (waveStartPerformanceTime !== null) {
+    alert("This wave is already running.");
     return;
   }
 
-  if (finishedStudentIds.has(String(student.ID))) {
+  const runners = getCurrentWaveStudents();
+
+  if (runners.length === 0) {
+    alert("No pupils are assigned to this wave.");
     return;
   }
 
-  const tapTime = new Date();
-  const elapsedSeconds = Math.round((tapTime - waveStartTime) / 1000);
-  const displayTime = secondsToTimeText(elapsedSeconds);
-  const wave = document.getElementById("waveSelect").value;
+  const alreadyCaptured =
+    finishRecords.filter(
+      record => record.wave === currentWave
+    );
 
-  finishCounter++;
-  const finishPosition = finishCounter;
+  if (alreadyCaptured.length > 0) {
+    const restart = confirm(
+      "This wave already has captured results. Start the timer again?"
+    );
 
-  finishedStudentIds.add(String(student.ID));
+    if (!restart) {
+      return;
+    }
+  }
 
-  capturedResults.push({
+  waveStartPerformanceTime = performance.now();
+
+  finishPositionCounter =
+    alreadyCaptured.length;
+
+  timerInterval = setInterval(updateTimer, 100);
+
+  document.getElementById("startWaveButton").disabled =
+    true;
+
+  updateQueueMessage();
+}
+
+
+function updateTimer() {
+  if (waveStartPerformanceTime === null) {
+    return;
+  }
+
+  const elapsedMilliseconds =
+    performance.now() - waveStartPerformanceTime;
+
+  const elapsedSeconds =
+    Math.floor(elapsedMilliseconds / 1000);
+
+  document.getElementById("timerDisplay").textContent =
+    secondsToTime(elapsedSeconds);
+}
+
+
+function captureFinish(student) {
+  if (waveStartPerformanceTime === null) {
+    alert("Press Start before recording finishers.");
+    return;
+  }
+
+  if (findFinishRecord(student.ID, currentWave)) {
+    return;
+  }
+
+  const capturedAt =
+    performance.now();
+
+  const elapsedSeconds =
+    Math.round(
+      (capturedAt - waveStartPerformanceTime) / 1000
+    );
+
+  finishPositionCounter += 1;
+
+  const record = {
     studentId: String(student.ID),
     no: student.No,
     name: student.Name,
-    wave: wave,
-    elapsedSeconds: elapsedSeconds,
-    displayTime: displayTime,
-    position: finishPosition,
-    saveFailed: false,
-    saved: false
-  });
+    className: student.Class,
+    wave: currentWave,
+    elapsedSeconds,
+    displayTime: secondsToTime(elapsedSeconds),
+    position: finishPositionCounter,
+    saveState: "queued",
+    queueId:
+      `${sessionId}-${student.ID}-${currentWave}-1`
+  };
 
-  const button = document.getElementById(`runner-${student.ID}`);
+  finishRecords.push(record);
 
-  if (button) {
-    button.classList.add("finished");
-    button.disabled = false;
+  renderRunnerCircles();
+  renderRecentFinishes();
 
-    button.innerHTML = `
-      <span class="runner-no">${student.No}</span>
-      ${student.Name}<br>
-      <strong>Pos ${finishPosition}</strong> | ${displayTime}<br>
-      Queued
-      <br>
-      <button class="undo-mini-btn" onclick="undoFinish('${student.ID}', '${wave}'); event.stopPropagation();">
-        Undo
-      </button>
-    `;
-  }
+  enqueueFinishSave(student, record);
+}
 
-  document.getElementById("timerStatus").textContent =
-    `Position ${finishPosition}: ${student.Name} captured at ${displayTime}.`;
 
-  const testDate = document.getElementById("testDate").value;
-  const className = document.getElementById("classSelect").value;
+function enqueueFinishSave(student, finishRecord) {
+  const testDate =
+    document.getElementById("testDate").value;
+
+  const className =
+    document.getElementById("classSelect").value;
 
   const queueItem = {
-    queueId: `${sessionId}-${student.ID}-1`,
-    student: student,
-    buttonId: `runner-${student.ID}`,
-    wave: wave,
-    displayTime: displayTime,
-    position: finishPosition,
+    queueId: finishRecord.queueId,
+    studentId: String(student.ID),
+    wave: finishRecord.wave,
     payload: {
       action: "saveRunFinish",
-      sessionId: sessionId,
-      testDate: testDate,
-      className: className,
-      wave: wave,
-      student: student,
-      elapsedSeconds: elapsedSeconds,
+      sessionId,
+      testDate,
+      className,
+      wave: finishRecord.wave,
+      student,
+      elapsedSeconds: finishRecord.elapsedSeconds,
       attemptNo: 1,
-      remarks: "Position " + finishPosition
+      remarks: `Position ${finishRecord.position}`
     }
   };
 
   saveQueue.push(queueItem);
-  addStoredPendingSave(queueItem);
+  storePendingSave(queueItem);
 
-  updateQueueStatus();
-  renderRecentFinishes();
+  setFinishSaveState(
+    student.ID,
+    finishRecord.wave,
+    "saving"
+  );
+
   processSaveQueue();
+  updateQueueMessage();
 }
 
 
 async function processSaveQueue() {
-  if (isSavingQueue) return;
+  if (saveQueueRunning) {
+    return;
+  }
 
-  isSavingQueue = true;
-  updateQueueStatus();
+  saveQueueRunning = true;
+  updateQueueMessage();
 
   while (saveQueue.length > 0) {
-    const item = saveQueue.shift();
-    const button = document.getElementById(item.buttonId);
-
-    if (button) {
-      button.innerHTML = `
-        <span class="runner-no">${item.student.No}</span>
-        ${item.student.Name}<br>
-        <strong>Pos ${item.position}</strong> | ${item.displayTime}<br>
-        Saving...
-      `;
-    }
+    const queueItem = saveQueue.shift();
 
     try {
-      const result = await callBackend(item.payload);
+      const result =
+        await callBackend(queueItem.payload);
 
-      if (result.success) {
-        removeStoredPendingSave(item.queueId);
+      const wasCancelled =
+        cancelledQueueIds.has(queueItem.queueId);
 
-        if (button) {
-          button.classList.remove("save-failed");
-          button.classList.add("finished");
+      if (result.success && wasCancelled) {
+        await callBackend({
+          action: "deleteRunResult",
+          sessionId,
+          studentId: queueItem.studentId,
+          attemptNo: 1
+        });
 
-          button.innerHTML = `
-            <span class="runner-no">${item.student.No}</span>
-            ${item.student.Name}<br>
-            <strong>Pos ${item.position}</strong> | ${result.result.Time}<br>
-            Grade: ${result.result.Grade}
-            <br>
-            <button class="undo-mini-btn" onclick="undoFinish('${item.student.ID}', '${item.wave}'); event.stopPropagation();">
-              Undo
-            </button>
-          `;
-        }
+        cancelledQueueIds.delete(queueItem.queueId);
+        removeStoredPendingSave(queueItem.queueId);
 
-        markCapturedSaveStatus(item.student.ID, item.wave, false, true);
-
-      } else {
-        markSaveFailed(item, button);
+        continue;
       }
 
+      if (!result.success) {
+        throw new Error(
+          result.error || "Unable to save timing."
+        );
+      }
+
+      removeStoredPendingSave(queueItem.queueId);
+
+      setFinishSaveState(
+        queueItem.studentId,
+        queueItem.wave,
+        "saved"
+      );
+
     } catch (error) {
-      markSaveFailed(item, button);
+      setFinishSaveState(
+        queueItem.studentId,
+        queueItem.wave,
+        "failed"
+      );
     }
 
-    updateQueueStatus();
+    renderRunnerCircles();
     renderRecentFinishes();
+    updateQueueMessage();
   }
 
-  isSavingQueue = false;
-  updateQueueStatus();
+  saveQueueRunning = false;
+  updateQueueMessage();
 }
 
 
-function markSaveFailed(item, button) {
-  if (button) {
-    button.classList.remove("finished");
-    button.classList.add("save-failed");
-
-    button.innerHTML = `
-      <span class="runner-no">${item.student.No}</span>
-      ${item.student.Name}<br>
-      <strong>Pos ${item.position}</strong> | ${item.displayTime}<br>
-      Save failed
-      <br>
-      <button class="undo-mini-btn" onclick="undoFinish('${item.student.ID}', '${item.wave}'); event.stopPropagation();">
-        Undo
-      </button>
-    `;
-  }
-
-  markCapturedSaveStatus(item.student.ID, item.wave, true, false);
+function findFinishRecord(studentId, wave) {
+  return finishRecords.find(record => (
+    String(record.studentId) === String(studentId) &&
+    record.wave === wave
+  ));
 }
 
 
-function markCapturedSaveStatus(studentId, wave, saveFailed, saved) {
-  const record = capturedResults.find(result => {
-    return String(result.studentId) === String(studentId) &&
-           result.wave === wave;
-  });
+function setFinishSaveState(studentId, wave, state) {
+  const record =
+    findFinishRecord(studentId, wave);
 
   if (record) {
-    record.saveFailed = saveFailed;
-    record.saved = saved;
+    record.saveState = state;
   }
-}
-
-
-async function undoFinish(studentId, wave) {
-  const confirmUndo = confirm(
-    "Undo this timing? Use this only if the wrong pupil was tapped."
-  );
-
-  if (!confirmUndo) {
-    return;
-  }
-
-  const record = capturedResults.find(result => {
-    return String(result.studentId) === String(studentId) && result.wave === wave;
-  });
-
-  capturedResults = capturedResults.filter(result => {
-    return !(String(result.studentId) === String(studentId) && result.wave === wave);
-  });
-
-  saveQueue = saveQueue.filter(item => {
-    return !(String(item.student.ID) === String(studentId) && item.wave === wave);
-  });
-
-  removeStoredPendingSave(`${sessionId}-${studentId}-1`);
-
-  finishedStudentIds.delete(String(studentId));
-
-  if (record && record.saved) {
-    try {
-      await callBackend({
-        action: "deleteRunResult",
-        sessionId: sessionId,
-        studentId: studentId,
-        attemptNo: 1
-      });
-    } catch (error) {
-      alert("Timing removed from screen, but backend deletion may have failed. Please check Run_Results.");
-    }
-  }
-
-  renumberFinishPositions(wave);
-  prepareWaveButtons();
-  renderRecentFinishes();
-  updateQueueStatus();
-
-  document.getElementById("timerStatus").textContent =
-    "Timing undone. Continue timing.";
-}
-
-
-function undoLastTap() {
-  const wave = document.getElementById("waveSelect").value;
-
-  const waveResults = capturedResults
-    .filter(result => result.wave === wave)
-    .sort((a, b) => b.position - a.position);
-
-  if (waveResults.length === 0) {
-    alert("No timing to undo for this wave.");
-    return;
-  }
-
-  const latest = waveResults[0];
-
-  undoFinish(latest.studentId, wave);
-}
-
-
-function renumberFinishPositions(wave) {
-  const waveResults = capturedResults
-    .filter(result => result.wave === wave)
-    .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds);
-
-  waveResults.forEach((result, index) => {
-    result.position = index + 1;
-  });
-
-  finishCounter = waveResults.length;
 }
 
 
 function renderRecentFinishes() {
-  const container = document.getElementById("recentFinishList");
+  const container =
+    document.getElementById("recentFinishList");
 
-  if (!container) return;
+  const records =
+    finishRecords
+      .filter(record => record.wave === currentWave)
+      .sort((a, b) => b.position - a.position)
+      .slice(0, 5);
 
-  const wave = document.getElementById("waveSelect").value;
-
-  const recent = capturedResults
-    .filter(result => result.wave === wave)
-    .sort((a, b) => b.position - a.position)
-    .slice(0, 5);
-
-  if (recent.length === 0) {
-    container.innerHTML = "No finishes yet.";
+  if (records.length === 0) {
+    container.textContent = "No finishers yet.";
     return;
   }
 
-  container.innerHTML = recent.map(result => {
-    const saveText = result.saved
-      ? "Saved"
-      : result.saveFailed
-        ? "Save failed"
-        : "Saving/Queued";
-
-    return `
-      <div class="recent-item">
-        <strong>Pos ${result.position}</strong>:
-        No. ${result.no} ${result.name} — ${result.displayTime}
-        (${saveText})
+  container.innerHTML =
+    records.map(record => `
+      <div class="recent-entry">
+        <strong>Pos ${escapeHtml(record.position)}</strong>
+        — No. ${escapeHtml(record.no)}
+        ${escapeHtml(record.name)}
+        — ${escapeHtml(record.displayTime)}
       </div>
-    `;
-  }).join("");
+    `).join("");
 }
 
 
-function updateQueueStatus() {
-  const queueText = document.getElementById("queueStatus");
+function updateQueueMessage() {
+  const storedCount =
+    readStoredPendingSaves().length;
 
-  if (!queueText) return;
+  const message =
+    document.getElementById("queueMessage");
 
-  const storedPending = getStoredPendingSaves().length;
-
-  if (saveQueue.length === 0 && !isSavingQueue && storedPending === 0) {
-    queueText.textContent = "No pending saves.";
+  if (
+    saveQueue.length === 0 &&
+    !saveQueueRunning &&
+    storedCount === 0
+  ) {
+    message.textContent =
+      "No pending saves";
     return;
   }
 
-  if (isSavingQueue) {
-    queueText.textContent =
-      `Saving... ${saveQueue.length} waiting. ${storedPending} stored pending. Do not close the page.`;
-    return;
-  }
-
-  queueText.textContent =
-    `${saveQueue.length} waiting to save. ${storedPending} stored pending. Do not close the page.`;
+  message.textContent =
+    `${saveQueue.length} waiting, ` +
+    `${storedCount} pending locally. Do not close the page.`;
 }
 
 
-function endWave() {
-  if (!waveStartTime) {
-    alert("Wave has not started.");
+/* =====================================================
+   UNDO
+===================================================== */
+
+function requestUndoFinish(studentId, wave) {
+  const record =
+    findFinishRecord(studentId, wave);
+
+  if (!record) {
     return;
   }
 
-  if (timerInterval) {
-    clearInterval(timerInterval);
-  }
-
-  const wave = document.getElementById("waveSelect").value;
-  const waveStudents = allStudents.filter(student => student.Wave === wave);
-
-  const capturedIdsForWave = new Set(
-    capturedResults
-      .filter(result => result.wave === wave)
-      .map(result => String(result.studentId))
+  const confirmed = confirm(
+    `Undo position ${record.position} for ${record.name}?`
   );
 
-  const remaining = waveStudents.filter(student => {
-    return !capturedIdsForWave.has(String(student.ID));
-  });
+  if (!confirmed) {
+    return;
+  }
 
-  waveStartTime = null;
-
-  document.getElementById("timerStatus").textContent =
-    `${wave} ended. ${remaining.length} pupils have no timing.`;
-
-  renderRemainingStudents(remaining);
-  showStep("review");
-  loadAllWaveSummaries();
+  undoFinish(studentId, wave);
 }
 
 
-function renderRemainingStudents(remainingStudents) {
-  const container = document.getElementById("remainingList");
+function undoLastFinish() {
+  const records =
+    finishRecords
+      .filter(record => record.wave === currentWave)
+      .sort((a, b) => b.position - a.position);
+
+  if (records.length === 0) {
+    alert("There is no finish timing to undo.");
+    return;
+  }
+
+  requestUndoFinish(
+    records[0].studentId,
+    currentWave
+  );
+}
+
+
+async function undoFinish(studentId, wave) {
+  const record =
+    findFinishRecord(studentId, wave);
+
+  if (!record) {
+    return;
+  }
+
+  finishRecords =
+    finishRecords.filter(item => !(
+      String(item.studentId) === String(studentId) &&
+      item.wave === wave
+    ));
+
+  const pendingQueueItem =
+    saveQueue.find(item =>
+      String(item.studentId) === String(studentId) &&
+      item.wave === wave
+    );
+
+  saveQueue =
+    saveQueue.filter(item => !(
+      String(item.studentId) === String(studentId) &&
+      item.wave === wave
+    ));
+
+  removeStoredPendingSave(record.queueId);
+
+  if (pendingQueueItem || record.saveState === "saving") {
+    cancelledQueueIds.add(record.queueId);
+  }
+
+  if (record.saveState === "saved") {
+    try {
+      await callBackend({
+        action: "deleteRunResult",
+        sessionId,
+        studentId,
+        attemptNo: 1
+      });
+    } catch (error) {
+      alert(
+        "The timing was removed from the screen, but the backend deletion may have failed."
+      );
+    }
+  }
+
+  renumberWavePositions(wave);
+
+  renderRunnerCircles();
+  renderRecentFinishes();
+  updateQueueMessage();
+}
+
+
+function renumberWavePositions(wave) {
+  const records =
+    finishRecords
+      .filter(record => record.wave === wave)
+      .sort(
+        (a, b) =>
+          a.elapsedSeconds - b.elapsedSeconds ||
+          a.position - b.position
+      );
+
+  records.forEach((record, index) => {
+    record.position = index + 1;
+  });
+
+  finishPositionCounter = records.length;
+}
+
+
+/* =====================================================
+   END WAVE AND REVIEW
+===================================================== */
+
+function endCurrentWave() {
+  if (waveStartPerformanceTime === null) {
+    alert("The wave has not started.");
+    return;
+  }
+
+  clearInterval(timerInterval);
+  timerInterval = null;
+
+  waveStartPerformanceTime = null;
+
+  document.getElementById("startWaveButton").disabled =
+    false;
+
+  currentReviewWave = currentWave;
+
+  renderCurrentWaveReview();
+  showOnlySection("stepWaveReview");
+  updateProgress("review");
+}
+
+
+function renderCurrentWaveReview() {
+  const heading =
+    document.getElementById("waveReviewHeading");
+
+  heading.textContent =
+    `${currentReviewWave} Review`;
+
+  const waveStudents =
+    students.filter(
+      student =>
+        student.RunAssignment === currentReviewWave
+    );
+
+  const finishIds =
+    new Set(
+      finishRecords
+        .filter(record => record.wave === currentReviewWave)
+        .map(record => String(record.studentId))
+    );
+
+  const remaining =
+    waveStudents.filter(
+      student =>
+        !finishIds.has(String(student.ID))
+    );
+
+  document.getElementById("waveReviewMessage").textContent =
+    `${finishIds.size} finished. ${remaining.length} without timing.`;
+
+  renderRemainingPupils(remaining);
+  renderWaveTable(
+    currentReviewWave,
+    "currentWaveReviewBody"
+  );
+
+  const button =
+    document.getElementById("reviewNextButton");
+
+  if (currentReviewWave === STATUS.WAVE_1) {
+    button.textContent =
+      "Confirm Review and Proceed to Wave 2";
+
+    button.onclick =
+      confirmReadyForWave2;
+  } else {
+    button.textContent =
+      "Confirm Review and View All Results";
+
+    button.onclick =
+      confirmReadyForFinalReview;
+  }
+}
+
+
+function renderRemainingPupils(remaining) {
+  const container =
+    document.getElementById("remainingPupils");
+
   container.innerHTML = "";
 
-  if (remainingStudents.length === 0) {
-    container.innerHTML = "<p>All pupils in this wave have timing.</p>";
+  if (remaining.length === 0) {
+    container.innerHTML =
+      "<p>All pupils have a finish time.</p>";
+
     return;
   }
 
-  remainingStudents.forEach((student, index) => {
-    const div = document.createElement("div");
-    div.className = "remaining-row";
+  remaining.forEach(student => {
+    const row =
+      document.createElement("div");
 
-    div.innerHTML = `
-      <div><strong>${student.No}</strong></div>
-      <div>${student.Name}</div>
-      <div>
-        <select id="remaining-status-${index}">
-          <option value="Still Running">Still Running</option>
-          <option value="DNF">DNF</option>
-          <option value="Did Not Start">Did Not Start</option>
-          <option value="Medical">Medical</option>
-          <option value="Injured">Injured</option>
-          <option value="Retest Needed">Retest Needed</option>
-          <option value="Removed from Wave">Removed from Wave</option>
-          <option value="Not Running">Not Running</option>
-        </select>
+    row.className = "remaining-row";
 
-        <button class="secondary-btn" onclick="markRemainingStatus('${student.ID}', ${index})">
-          Save
-        </button>
+    row.innerHTML = `
+      <div class="remaining-no">
+        ${escapeHtml(student.No)}
       </div>
+
+      <div class="remaining-name">
+        ${escapeHtml(student.Name)}
+      </div>
+
+      <select
+        class="status-select"
+        id="status-${escapeAttribute(student.ID)}"
+      >
+        <option value="">Select status</option>
+        <option value="DNF">DNF</option>
+        <option value="Did Not Start">Did Not Start</option>
+        <option value="Medical">Medical</option>
+        <option value="Injured">Injured</option>
+        <option value="Retest Needed">Retest Needed</option>
+        <option value="Removed from Wave">Removed from Wave</option>
+        <option value="Still Running">Still Running</option>
+      </select>
+
+      <button
+        class="btn btn-secondary"
+        onclick="saveRemainingStatus('${escapeAttribute(student.ID)}')"
+      >
+        Save
+      </button>
     `;
 
-    container.appendChild(div);
+    container.appendChild(row);
   });
 }
 
 
-async function markRemainingStatus(studentId, index) {
-  const student = allStudents.find(s => String(s.ID) === String(studentId));
+async function saveRemainingStatus(studentId) {
+  const student =
+    students.find(
+      item =>
+        String(item.ID) === String(studentId)
+    );
 
-  if (!student) {
-    alert("Student not found.");
+  const select =
+    document.getElementById(`status-${studentId}`);
+
+  if (!student || !select || !select.value) {
+    alert("Please select a status.");
     return;
   }
-
-  const status = document.getElementById(`remaining-status-${index}`).value;
-  const testDate = document.getElementById("testDate").value;
-  const className = document.getElementById("classSelect").value;
-  const wave = document.getElementById("waveSelect").value;
 
   showLoading("Saving status...");
 
   try {
     const result = await callBackend({
       action: "markRunStatus",
-      sessionId: sessionId,
-      testDate: testDate,
-      className: className,
-      wave: wave,
-      student: student,
-      status: status,
+      sessionId,
+      testDate:
+        document.getElementById("testDate").value,
+      className:
+        document.getElementById("classSelect").value,
+      wave: currentReviewWave,
+      student,
+      status: select.value,
       remarks: "",
       attemptNo: 1
     });
 
-    if (result.success) {
-      alert(`${student.Name} marked as ${status}.`);
-      loadAllWaveSummaries();
-    } else {
-      alert("Failed to mark status: " + result.error);
+    if (!result.success) {
+      throw new Error(
+        result.error || "Unable to save status."
+      );
     }
 
+    select.disabled = true;
+
+  } catch (error) {
+    alert("Unable to save status: " + error.message);
+
   } finally {
     hideLoading();
   }
 }
 
 
-function proceedToWave2() {
-  const waveSelect = document.getElementById("waveSelect");
+async function confirmReadyForWave2() {
+  const ready = confirm(
+    "Wave 1 review is complete. Proceed to Wave 2?"
+  );
 
-  waveSelect.value = "Wave 2";
-
-  waveStartTime = null;
-  finishCounter = capturedResults.filter(result => result.wave === "Wave 2").length;
-
-  if (timerInterval) {
-    clearInterval(timerInterval);
-  }
-
-  document.getElementById("timerDisplay").textContent = "00:00";
-  document.getElementById("timerStatus").textContent =
-    "Wave 2 is ready. Click Start Wave when pupils begin.";
-
-  prepareWaveButtons();
-  showStep("timing");
-}
-
-
-async function loadAllWaveSummaries() {
-  if (!sessionId) {
-    alert("No session ID yet. Save wave assignments first.");
+  if (!ready) {
     return;
   }
 
-  showLoading("Loading wave results...");
+  await waitForSaveQueue();
 
-  try {
-    await loadSpecificWaveSummary("Wave 1", "wave1SummaryTable", "wave1SummaryBody");
-    await loadSpecificWaveSummary("Wave 2", "wave2SummaryTable", "wave2SummaryBody");
-  } finally {
-    hideLoading();
+  prepareWaveForTiming("Wave 2");
+}
+
+
+async function confirmReadyForFinalReview() {
+  const ready = confirm(
+    "Wave 2 review is complete. View all run results?"
+  );
+
+  if (!ready) {
+    return;
+  }
+
+  await waitForSaveQueue();
+
+  renderFinalReview();
+  showOnlySection("stepFinalReview");
+  updateProgress("review");
+}
+
+
+async function waitForSaveQueue() {
+  if (
+    saveQueue.length === 0 &&
+    !saveQueueRunning &&
+    readStoredPendingSaves().length === 0
+  ) {
+    return;
+  }
+
+  showLoading("Finishing pending saves...");
+
+  while (
+    saveQueue.length > 0 ||
+    saveQueueRunning
+  ) {
+    await delay(250);
+  }
+
+  hideLoading();
+
+  if (readStoredPendingSaves().length > 0) {
+    alert(
+      "Some timings are still stored locally and could not be saved. Do not close the page."
+    );
   }
 }
 
 
-async function loadSpecificWaveSummary(wave, tableId, bodyId) {
-  const result = await callBackend({
-    action: "getRunWaveSummary",
-    sessionId: sessionId,
-    wave: wave
-  });
+/* =====================================================
+   FINAL REVIEW
+===================================================== */
 
-  if (!result.success) {
-    alert("Failed to load " + wave + " summary: " + result.error);
-    return;
-  }
+function renderFinalReview() {
+  renderWaveTable("Wave 1", "finalWave1Body");
+  renderWaveTable("Wave 2", "finalWave2Body");
+  renderNotRunningPupils();
 
-  const table = document.getElementById(tableId);
-  const tbody = document.getElementById(bodyId);
+  updateFinishSessionButton();
+}
+
+
+function renderWaveTable(wave, bodyId) {
+  const tbody =
+    document.getElementById(bodyId);
 
   tbody.innerHTML = "";
 
-  const sortedResults = result.results.sort((a, b) => {
-    const aSeconds = Number(a.TimeSeconds);
-    const bSeconds = Number(b.TimeSeconds);
+  const records =
+    finishRecords
+      .filter(record => record.wave === wave)
+      .sort((a, b) => a.position - b.position);
 
-    if (!isNaN(aSeconds) && !isNaN(bSeconds)) {
-      return aSeconds - bSeconds;
-    }
-
-    return Number(a.No) - Number(b.No);
-  });
-
-  sortedResults.forEach((row, index) => {
-    const tr = document.createElement("tr");
-
-    const hasTiming =
-      row.TimeSeconds !== "" &&
-      row.TimeSeconds !== null &&
-      row.TimeSeconds !== undefined;
-
-    const position = hasTiming ? index + 1 : "";
-
-    tr.innerHTML = `
-      <td>${position}</td>
-      <td>${row.No}</td>
-      <td>${row.Name}</td>
-      <td>${row.Time || ""}</td>
-      <td>${row.TimeSeconds || ""}</td>
-      <td>${row.Grade || ""}</td>
-      <td>${row.Status || ""}</td>
-      <td>${row.Remarks || ""}</td>
+  if (records.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5">No results recorded.</td>
+      </tr>
     `;
 
-    tbody.appendChild(tr);
+    return;
+  }
+
+  records.forEach(record => {
+    const row =
+      document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${escapeHtml(record.name)}</td>
+      <td>${escapeHtml(record.className)}</td>
+      <td>${escapeHtml(record.wave)}</td>
+      <td>${escapeHtml(record.displayTime)}</td>
+      <td>${escapeHtml(record.position)}</td>
+    `;
+
+    tbody.appendChild(row);
   });
-
-  table.style.display = "table";
 }
 
 
-async function loadWaveSummary() {
-  await loadAllWaveSummaries();
+function renderNotRunningPupils() {
+  const container =
+    document.getElementById("notRunningList");
+
+  const notRunning =
+    students.filter(
+      student =>
+        student.RunAssignment === STATUS.NOT_RUNNING
+    );
+
+  container.innerHTML = "";
+
+  if (notRunning.length === 0) {
+    container.innerHTML =
+      "<p>No pupils were marked Not Running.</p>";
+
+    return;
+  }
+
+  notRunning.forEach(student => {
+    const row =
+      document.createElement("div");
+
+    row.className = "remaining-row";
+
+    row.innerHTML = `
+      <div class="remaining-no">
+        ${escapeHtml(student.No)}
+      </div>
+
+      <div class="remaining-name">
+        ${escapeHtml(student.Name)}
+      </div>
+
+      <select
+        class="status-select"
+        id="not-running-reason-${escapeAttribute(student.ID)}"
+      >
+        <option value="">Select reason</option>
+        <option value="Did Not Start">Did Not Start</option>
+        <option value="Medical">Medical</option>
+        <option value="Injured">Injured</option>
+        <option value="Retest Needed">Retest Needed</option>
+        <option value="Not Running">Not Running</option>
+      </select>
+
+      <button
+        class="btn btn-secondary"
+        onclick="saveNotRunningReason('${escapeAttribute(student.ID)}')"
+      >
+        Save
+      </button>
+    `;
+
+    container.appendChild(row);
+  });
 }
 
 
-function secondsToTimeText(seconds) {
-  const totalSeconds = Math.max(0, Math.round(seconds));
-  const minutes = Math.floor(totalSeconds / 60);
-  const remainingSeconds = totalSeconds % 60;
+async function saveNotRunningReason(studentId) {
+  const student =
+    students.find(
+      item =>
+        String(item.ID) === String(studentId)
+    );
 
-  return String(minutes).padStart(2, "0") + ":" +
-         String(remainingSeconds).padStart(2, "0");
+  const select =
+    document.getElementById(
+      `not-running-reason-${studentId}`
+    );
+
+  if (!student || !select || !select.value) {
+    alert("Please select a reason.");
+    return;
+  }
+
+  showLoading("Saving Not Running reason...");
+
+  try {
+    const result = await callBackend({
+      action: "markRunStatus",
+      sessionId,
+      testDate:
+        document.getElementById("testDate").value,
+      className:
+        document.getElementById("classSelect").value,
+      wave: "Not Running",
+      student,
+      status: select.value,
+      remarks: "",
+      attemptNo: 1
+    });
+
+    if (!result.success) {
+      throw new Error(
+        result.error || "Unable to save reason."
+      );
+    }
+
+    student.NotRunningReason = select.value;
+    select.disabled = true;
+
+  } catch (error) {
+    alert("Unable to save reason: " + error.message);
+
+  } finally {
+    hideLoading();
+  }
 }
 
 
-function addStoredPendingSave(queueItem) {
-  const stored = getStoredPendingSaves();
+function updateFinishSessionButton() {
+  const button =
+    document.getElementById("finishSessionButton");
 
-  const cleanItem = {
-    queueId: queueItem.queueId,
-    payload: queueItem.payload,
-    displayTime: queueItem.displayTime,
-    position: queueItem.position,
-    studentName: queueItem.student.Name,
-    studentNo: queueItem.student.No
-  };
+  button.disabled =
+    hasUnsafeWork();
+}
 
-  const filtered = stored.filter(item => item.queueId !== cleanItem.queueId);
-  filtered.push(cleanItem);
 
-  localStorage.setItem(PENDING_SAVE_KEY, JSON.stringify(filtered));
+async function finishRunSession() {
+  await waitForSaveQueue();
+
+  if (hasUnsafeWork()) {
+    alert(
+      "Some saves are still pending. Keep this page open."
+    );
+
+    return;
+  }
+
+  const confirmed = confirm(
+    "Confirm that the run session is complete?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const message =
+    document.getElementById("finalSaveMessage");
+
+  message.textContent =
+    "Run session completed. All finish timings have been saved.";
+
+  message.classList.remove("hidden");
+
+  document.getElementById("finishSessionButton").disabled =
+    true;
+}
+
+
+/* =====================================================
+   LOCAL PENDING SAVE STORAGE
+===================================================== */
+
+function storePendingSave(queueItem) {
+  const stored =
+    readStoredPendingSaves();
+
+  const filtered =
+    stored.filter(
+      item =>
+        item.queueId !== queueItem.queueId
+    );
+
+  filtered.push(queueItem);
+
+  localStorage.setItem(
+    PENDING_SAVE_STORAGE_KEY,
+    JSON.stringify(filtered)
+  );
 }
 
 
 function removeStoredPendingSave(queueId) {
-  const stored = getStoredPendingSaves();
-  const filtered = stored.filter(item => item.queueId !== queueId);
+  const stored =
+    readStoredPendingSaves();
 
-  localStorage.setItem(PENDING_SAVE_KEY, JSON.stringify(filtered));
+  const filtered =
+    stored.filter(
+      item =>
+        item.queueId !== queueId
+    );
+
+  localStorage.setItem(
+    PENDING_SAVE_STORAGE_KEY,
+    JSON.stringify(filtered)
+  );
 }
 
 
-function getStoredPendingSaves() {
+function readStoredPendingSaves() {
   try {
-    const raw = localStorage.getItem(PENDING_SAVE_KEY);
+    const raw =
+      localStorage.getItem(
+        PENDING_SAVE_STORAGE_KEY
+      );
 
-    if (!raw) return [];
+    if (!raw) {
+      return [];
+    }
 
-    const parsed = JSON.parse(raw);
+    const parsed =
+      JSON.parse(raw);
 
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+
   } catch (error) {
     return [];
   }
 }
 
 
-async function retryPendingSavesFromStorage() {
-  const stored = getStoredPendingSaves();
+async function retryStoredPendingSaves() {
+  const stored =
+    readStoredPendingSaves();
 
   if (stored.length === 0) {
-    updateQueueStatus();
+    updateQueueMessage();
     return;
   }
 
-  const confirmRetry = confirm(
-    stored.length +
-    " unsaved run timing record(s) were found from a previous session. Retry saving now?"
+  const retry = confirm(
+    `${stored.length} unsaved timing record(s) were found. Retry saving now?`
   );
 
-  if (!confirmRetry) {
-    updateQueueStatus();
+  if (!retry) {
+    updateQueueMessage();
     return;
   }
 
   showLoading("Retrying unsaved timings...");
 
   try {
-    for (const item of stored) {
+    for (const queueItem of stored) {
       try {
-        const result = await callBackend(item.payload);
+        const result =
+          await callBackend(queueItem.payload);
 
         if (result.success) {
-          removeStoredPendingSave(item.queueId);
+          removeStoredPendingSave(
+            queueItem.queueId
+          );
         }
+
       } catch (error) {
-        console.error("Retry save failed:", error);
+        console.error(
+          "Pending save retry failed:",
+          error
+        );
       }
     }
+
   } finally {
     hideLoading();
-    updateQueueStatus();
+    updateQueueMessage();
   }
 }
 
 
-function clearRunPage() {
-  allStudents = [];
-  sessionId = "";
-  waveStartTime = null;
-  finishedStudentIds = new Set();
-  saveQueue = [];
-  isSavingQueue = false;
-  capturedResults = [];
-  finishCounter = 0;
+/* =====================================================
+   RESET
+===================================================== */
 
-  if (timerInterval) {
-    clearInterval(timerInterval);
+function resetSessionState() {
+  students = [];
+  sessionId = "";
+  currentWave = "Wave 1";
+
+  waveStartPerformanceTime = null;
+
+  clearInterval(timerInterval);
+  timerInterval = null;
+
+  finishRecords = [];
+  finishPositionCounter = 0;
+
+  saveQueue = [];
+  saveQueueRunning = false;
+  cancelledQueueIds = new Set();
+
+  assignmentTapTrackers = {};
+
+  document.getElementById("wave1AssignmentGrid").innerHTML = "";
+  document.getElementById("wave2AssignmentGrid").innerHTML = "";
+  document.getElementById("runnerGrid").innerHTML = "";
+  document.getElementById("remainingPupils").innerHTML = "";
+
+  document.getElementById("timerDisplay").textContent = "00:00";
+  document.getElementById("recentFinishList").textContent =
+    "No finishers yet.";
+
+  updateAssignmentCounts();
+  updateQueueMessage();
+}
+
+
+/* =====================================================
+   UTILITIES
+===================================================== */
+
+function secondsToTime(totalSeconds) {
+  const safeSeconds =
+    Math.max(0, Math.round(totalSeconds));
+
+  const minutes =
+    Math.floor(safeSeconds / 60);
+
+  const seconds =
+    safeSeconds % 60;
+
+  return (
+    String(minutes).padStart(2, "0") +
+    ":" +
+    String(seconds).padStart(2, "0")
+  );
+}
+
+
+function formatName(name) {
+  const words =
+    String(name || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+  if (words.length === 0) {
+    return "";
   }
 
-  document.getElementById("studentAssignmentList").innerHTML = "";
-  document.getElementById("runnerButtons").innerHTML = "";
-  document.getElementById("remainingList").innerHTML = "";
-  document.getElementById("wave1SummaryBody").innerHTML = "";
-  document.getElementById("wave2SummaryBody").innerHTML = "";
-  document.getElementById("wave1SummaryTable").style.display = "none";
-  document.getElementById("wave2SummaryTable").style.display = "none";
-  document.getElementById("timerDisplay").textContent = "00:00";
-  document.getElementById("timerStatus").textContent = "";
-  document.getElementById("recentFinishList").innerHTML = "No finishes yet.";
+  if (words.length === 1) {
+    return escapeHtml(words[0]);
+  }
 
-  updateWaveCounts();
-  updateQueueStatus();
+  const midpoint =
+    Math.ceil(words.length / 2);
+
+  const firstLine =
+    words.slice(0, midpoint).join(" ");
+
+  const secondLine =
+    words.slice(midpoint).join(" ");
+
+  return (
+    escapeHtml(firstLine) +
+    "<br>" +
+    escapeHtml(secondLine)
+  );
+}
+
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
+
+function delay(milliseconds) {
+  return new Promise(resolve => {
+    setTimeout(resolve, milliseconds);
+  });
 }
