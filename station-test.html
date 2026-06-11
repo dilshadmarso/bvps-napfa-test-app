@@ -1,715 +1,2204 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, maximum-scale=1"
-  >
-
-  <title>BVPS NAPFA 5-Station Tester</title>
-
-  <style>
-    :root {
-      --navy: #173b73;
-      --navy-dark: #102b56;
-      --blue-light: #eaf1ff;
-
-      --green: #23875d;
-      --green-light: #ddf7ea;
-
-      --red: #c43d4f;
-      --red-light: #ffe7ea;
-
-      --amber: #a56600;
-      --amber-light: #fff3d5;
-
-      --grey-50: #f7f8fb;
-      --grey-100: #eef1f5;
-      --grey-200: #dce1e8;
-      --grey-500: #687386;
-      --grey-800: #263142;
-
-      --shadow: 0 5px 18px rgba(20, 39, 73, 0.09);
-    }
+const APP_CONFIG = {
+  spreadsheetName: 'BVPS NAPFA Test App Data',
+
+  sheets: [
+    'Student_Master',
+    'NAPFA_Rubric',
+    'Award_Rules',
+    'Station_Results',
+    'Run_Session',
+    'Run_Results',
+    'Edit_Log',
+    'Upload_Log',
+    'Download_Log'
+  ],
+
+  headers: {
+    Student_Master: [
+      'No',
+      'Name',
+      'ID',
+      'Class',
+      'Gender',
+      'DOB',
+      'Group'
+    ],
+
+    NAPFA_Rubric: [
+      'Station',
+      'Gender',
+      'Age',
+      'Grade',
+      'Min',
+      'Max',
+      'Unit'
+    ],
+
+    Award_Rules: [
+      'Grade',
+      'Points'
+    ],
+
+    Station_Results: [
+      'Session ID',
+      'Test Date',
+      'Class',
+      'Group',
+      'No',
+      'ID',
+      'Name',
+      'Gender',
+      'DOB',
+      'Age Used',
+      'Station',
+      'Score',
+      'Grade',
+      'Status',
+      'Tester',
+      'Remarks'
+    ],
+
+    Run_Session: [
+      'Session ID',
+      'Test Date',
+      'Mode',
+      'Class',
+      'No',
+      'ID',
+      'Name',
+      'Wave',
+      'Run Status'
+    ],
+
+    Run_Results: [
+      'Session ID',
+      'Test Date',
+      'Class',
+      'No',
+      'ID',
+      'Name',
+      'Gender',
+      'DOB',
+      'Age Used',
+      'Wave',
+      'Attempt No',
+      'Time',
+      'Time Seconds',
+      'Grade',
+      'Status',
+      'Remarks'
+    ],
+
+    Edit_Log: [
+      'Timestamp',
+      'Session ID',
+      'ID',
+      'Name',
+      'Module',
+      'Field Changed',
+      'Old Value',
+      'New Value',
+      'Edited By'
+    ],
 
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
+    Upload_Log: [
+      'Timestamp',
+      'Class',
+      'Action',
+      'Rows Uploaded',
+      'Uploaded By',
+      'Remarks'
+    ],
 
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: var(--grey-50);
-      color: var(--grey-800);
-    }
+    Download_Log: [
+      'Timestamp',
+      'Download Type',
+      'Class',
+      'Test Date',
+      'Downloaded By',
+      'Rows Downloaded'
+    ]
+  }
+};
 
-    button,
-    input,
-    select,
-    textarea {
-      font: inherit;
-    }
 
-    button {
-      touch-action: manipulation;
-    }
+/* =====================================================
+   WEB APP ROUTER
+===================================================== */
 
-    .hidden {
-      display: none !important;
-    }
+function doGet() {
+  return jsonResponse_({
+    success: true,
+    message: 'BVPS NAPFA backend is running.'
+  });
+}
 
-    .page {
-      width: min(100%, 1050px);
-      margin: auto;
-      padding: 10px;
-    }
 
-    .app-header {
-      margin-bottom: 12px;
-      padding: 18px;
-      border-radius: 20px;
-      background: linear-gradient(135deg, var(--navy), var(--navy-dark));
-      color: white;
-      box-shadow: var(--shadow);
-    }
+function doPost(e) {
+  try {
+    setupSheets_();
 
-    .app-header h1 {
-      margin: 0;
-      font-size: 23px;
+    if (!e || !e.postData || !e.postData.contents) {
+      throw new Error('No request body received.');
     }
 
-    .app-header p {
-      margin: 7px 0 0;
-      font-size: 14px;
-      opacity: 0.9;
-    }
+    const payload = JSON.parse(e.postData.contents);
+    const action = cleanValue_(payload.action);
 
-    .progress {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 7px;
-      margin-bottom: 12px;
-    }
+    switch (action) {
+      case 'setupSheets':
+        setupSheets_();
+        return jsonResponse_({
+          success: true,
+          message: 'Sheets checked and prepared.'
+        });
 
-    .progress-item {
-      min-height: 45px;
-      border: 0;
-      border-radius: 12px;
-      background: var(--grey-100);
-      color: var(--grey-500);
-      font-size: 12px;
-      font-weight: 700;
-    }
+      case 'getLevels':
+        return jsonResponse_(getLevels_());
 
-    .progress-item.active {
-      background: var(--navy);
-      color: white;
-    }
+      case 'getClasses':
+        return jsonResponse_(getClasses_(payload));
 
-    .progress-item.done {
-      background: var(--green-light);
-      color: var(--green);
-    }
+      case 'getGroupsByClass':
+        return jsonResponse_(getGroupsByClass_(payload));
 
-    .panel {
-      padding: 16px;
-      border-radius: 20px;
-      background: white;
-      box-shadow: var(--shadow);
-    }
+      case 'uploadStudentCsv':
+        return jsonResponse_(uploadStudentCsv_(payload));
 
-    .panel h2 {
-      margin: 0 0 14px;
-      color: var(--navy);
-      font-size: 21px;
-    }
+      case 'getStationTesterData':
+        return jsonResponse_(getStationTesterData_(payload));
 
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-    }
+      case 'getStationRubric':
+        return jsonResponse_(getStationRubric_(payload));
 
-    .field label {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 13px;
-      font-weight: 700;
-    }
+      case 'getExistingStationResults':
+        return jsonResponse_(getExistingStationResults_(payload));
 
-    .field input,
-    .field select {
-      width: 100%;
-      min-height: 47px;
-      padding: 10px 12px;
-      border: 1px solid var(--grey-200);
-      border-radius: 12px;
-      background: white;
-      font-size: 16px;
-    }
+      case 'saveStationResultsBatch':
+        return jsonResponse_(saveStationResultsBatch_(payload));
 
-    .information,
-    .warning {
-      margin: 12px 0;
-      padding: 12px;
-      border-radius: 12px;
-      line-height: 1.45;
-      font-size: 14px;
-    }
+      case 'getRunStudentsByClass':
+        return jsonResponse_(getRunStudentsByClass_(payload));
 
-    .information {
-      border-left: 5px solid var(--navy);
-      background: var(--blue-light);
-    }
+      case 'saveRunSession':
+        return jsonResponse_(saveRunSession_(payload));
 
-    .warning {
-      border-left: 5px solid #df991c;
-      background: var(--amber-light);
-    }
+      case 'saveRunFinish':
+        return jsonResponse_(saveRunFinish_(payload));
 
-    .message {
-      min-height: 20px;
-      margin: 12px 0;
-      font-size: 14px;
-      font-weight: 700;
-    }
+      case 'markRunStatus':
+        return jsonResponse_(markRunStatus_(payload));
 
-    .action-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 9px;
-      margin-top: 15px;
-    }
+      case 'saveNotRunningReasons':
+        return jsonResponse_(saveNotRunningReasons_(payload));
 
-    .btn {
-      min-height: 46px;
-      padding: 11px 16px;
-      border: 0;
-      border-radius: 13px;
-      font-weight: 700;
-      cursor: pointer;
-    }
+      case 'getRunWaveSummary':
+        return jsonResponse_(getRunWaveSummary_(payload));
 
-    .btn-primary {
-      background: var(--navy);
-      color: white;
-    }
+      case 'deleteRunResult':
+        return jsonResponse_(deleteRunResult_(payload));
 
-    .btn-secondary {
-      background: var(--grey-100);
-      color: var(--navy);
-    }
+      case 'completeRunSession':
+        return jsonResponse_(completeRunSession_(payload));
 
-    .btn-danger {
-      background: var(--red-light);
-      color: var(--red);
-    }
+      case 'getStationSetupData':
+        return jsonResponse_(getStationSetupData_(payload));
 
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+      default:
+        throw new Error('Unknown action: ' + action);
     }
 
-    .tester-header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      margin: -16px -16px 14px;
-      padding: 12px 16px;
-      border-radius: 20px 20px 16px 16px;
-      background: rgba(255,255,255,0.97);
-      box-shadow: 0 5px 15px rgba(20,39,73,0.11);
-      backdrop-filter: blur(8px);
-    }
+  } catch (error) {
+    return jsonResponse_({
+      success: false,
+      error: error.message,
+      stack: error.stack || ''
+    });
+  }
+}
 
-    .tester-title {
-      font-size: 19px;
-      font-weight: 800;
-      color: var(--navy);
-    }
 
-    .tester-subtitle {
-      margin-top: 4px;
-      font-size: 13px;
-      color: var(--grey-500);
-    }
+/* =====================================================
+   SHEET SETUP
+===================================================== */
 
-    .progress-strip {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 7px;
-      margin-top: 10px;
-    }
+function setupSheets_() {
+  const spreadsheet = getSpreadsheet_();
 
-    .progress-box {
-      padding: 8px;
-      border-radius: 11px;
-      background: var(--grey-50);
-      text-align: center;
-      font-size: 11px;
-    }
+  APP_CONFIG.sheets.forEach(sheetName => {
+    let sheet = spreadsheet.getSheetByName(sheetName);
 
-    .progress-number {
-      display: block;
-      font-size: 21px;
-      font-weight: 900;
-      color: var(--navy);
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(sheetName);
     }
 
-    .student-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-      gap: 10px;
-    }
+    const headers = APP_CONFIG.headers[sheetName];
 
-    .student-card {
-      padding: 12px;
-      border: 2px solid var(--grey-200);
-      border-radius: 18px;
-      background: white;
-      transition: border-color 0.15s, background 0.15s;
+    if (!headers) {
+      return;
     }
 
-    .student-card.complete {
-      border-color: var(--green);
-      background: var(--green-light);
-    }
+    const currentLastColumn = sheet.getLastColumn();
 
-    .student-card.edited {
-      border-color: #d89516;
-      background: var(--amber-light);
-    }
+    let currentHeaders = [];
 
-    .student-card.failed {
-      border-color: var(--red);
-      background: var(--red-light);
+    if (currentLastColumn > 0) {
+      currentHeaders = sheet
+        .getRange(1, 1, 1, currentLastColumn)
+        .getValues()[0]
+        .map(cleanValue_);
     }
 
-    .student-top {
-      display: grid;
-      grid-template-columns: auto 1fr auto;
-      gap: 8px;
-      align-items: start;
-    }
+    const headersMatch =
+      currentHeaders.length === headers.length &&
+      headers.every((header, index) => {
+        return currentHeaders[index] === header;
+      });
 
-    .register-number {
-      font-size: 28px;
-      line-height: 1;
-      font-weight: 900;
-      color: var(--navy);
+    if (!headersMatch) {
+      sheet
+        .getRange(1, 1, 1, headers.length)
+        .setValues([headers]);
     }
 
-    .student-name {
-      min-height: 34px;
-      font-size: 12px;
-      line-height: 1.2;
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
+    sheet.setFrozenRows(1);
+  });
+}
 
-    .grade-badge {
-      min-width: 35px;
-      padding: 7px 8px;
-      border-radius: 11px;
-      background: var(--grey-100);
-      text-align: center;
-      font-size: 18px;
-      font-weight: 900;
-    }
 
-    .grade-badge.grade-a,
-    .grade-badge.grade-b,
-    .grade-badge.grade-c {
-      background: var(--green-light);
-      color: var(--green);
-    }
+function getSpreadsheet_() {
+  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
-    .grade-badge.grade-d,
-    .grade-badge.grade-e {
-      background: var(--amber-light);
-      color: var(--amber);
-    }
+  if (
+    activeSpreadsheet &&
+    activeSpreadsheet.getName() === APP_CONFIG.spreadsheetName
+  ) {
+    return activeSpreadsheet;
+  }
 
-    .grade-badge.grade-f {
-      background: var(--red-light);
-      color: var(--red);
-    }
+  const files = DriveApp.getFilesByName(APP_CONFIG.spreadsheetName);
 
-    .score-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 7px;
-      margin-top: 10px;
-      align-items: center;
-    }
+  if (!files.hasNext()) {
+    throw new Error(
+      'Spreadsheet not found: ' +
+      APP_CONFIG.spreadsheetName
+    );
+  }
 
-    .score-input {
-      width: 100%;
-      min-height: 48px;
-      padding: 8px 10px;
-      border: 2px solid var(--grey-200);
-      border-radius: 12px;
-      background: white;
-      font-size: 22px;
-      font-weight: 800;
-      text-align: center;
-    }
+  const file = files.next();
 
-    .score-input:focus {
-      outline: none;
-      border-color: var(--navy);
-    }
+  return SpreadsheetApp.openById(file.getId());
+}
 
-    .unit-label {
-      min-width: 45px;
-      color: var(--grey-500);
-      font-size: 12px;
-      font-weight: 700;
-    }
 
-    .remarks-input {
-      width: 100%;
-      min-height: 38px;
-      margin-top: 8px;
-      padding: 8px 9px;
-      border: 1px solid var(--grey-200);
-      border-radius: 10px;
-      font-size: 13px;
-    }
+function getSheet_(sheetName) {
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
 
-    .card-status {
-      min-height: 16px;
-      margin-top: 7px;
-      color: var(--grey-500);
-      font-size: 11px;
-      font-weight: 700;
-    }
+  if (!sheet) {
+    throw new Error('Sheet not found: ' + sheetName);
+  }
 
-    .save-bar {
-      position: sticky;
-      bottom: 0;
-      z-index: 90;
-      margin: 15px -16px -16px;
-      padding: 11px 16px;
-      border-radius: 16px 16px 20px 20px;
-      background: rgba(255,255,255,0.98);
-      box-shadow: 0 -5px 16px rgba(20,39,73,0.10);
-    }
+  return sheet;
+}
 
-    .save-bar-message {
-      margin-bottom: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      text-align: center;
-    }
 
-    .save-bar .btn {
-      width: 100%;
-    }
+function getSheetData_(sheetName) {
+  const sheet = getSheet_(sheetName);
+  const values = sheet.getDataRange().getValues();
 
-    .review-table-wrapper {
-      overflow-x: auto;
-      border: 1px solid var(--grey-200);
-      border-radius: 13px;
-    }
+  if (values.length <= 1) {
+    return [];
+  }
 
-    table {
-      width: 100%;
-      min-width: 650px;
-      border-collapse: collapse;
-      background: white;
-    }
+  const headers = values[0].map(cleanValue_);
 
-    th,
-    td {
-      padding: 10px;
-      border-bottom: 1px solid var(--grey-200);
-      text-align: left;
-      font-size: 13px;
-    }
+  return values.slice(1).map((row, index) => {
+    const object = {
+      _rowNumber: index + 2
+    };
 
-    th {
-      background: var(--grey-100);
-      color: var(--navy);
-      white-space: nowrap;
-    }
+    headers.forEach((header, columnIndex) => {
+      object[header] = row[columnIndex];
+    });
 
-    .success-box {
-      margin-top: 14px;
-      padding: 13px;
-      border-radius: 13px;
-      background: var(--green-light);
-      color: var(--green);
-      font-weight: 700;
-    }
+    return object;
+  });
+}
 
-    .loading-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 10000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      background: rgba(15,28,48,0.56);
-    }
 
-    .loading-card {
-      width: min(280px, 100%);
-      padding: 23px;
-      border-radius: 20px;
-      background: white;
-      text-align: center;
-      box-shadow: var(--shadow);
-    }
+function appendRows_(sheetName, rows) {
+  if (!rows || rows.length === 0) {
+    return;
+  }
 
-    .spinner {
-      width: 42px;
-      height: 42px;
-      margin: 0 auto 13px;
-      border: 5px solid var(--grey-200);
-      border-top-color: var(--navy);
-      border-radius: 50%;
-      animation: spin 0.75s linear infinite;
-    }
+  const sheet = getSheet_(sheetName);
+  const headers = APP_CONFIG.headers[sheetName];
+
+  const values = rows.map(row => {
+    return headers.map(header => {
+      return row[header] !== undefined
+        ? row[header]
+        : '';
+    });
+  });
+
+  sheet
+    .getRange(
+      sheet.getLastRow() + 1,
+      1,
+      values.length,
+      headers.length
+    )
+    .setValues(values);
+}
+
+
+function updateSheetRow_(sheetName, rowNumber, rowObject) {
+  const sheet = getSheet_(sheetName);
+  const headers = APP_CONFIG.headers[sheetName];
+
+  const values = headers.map(header => {
+    return rowObject[header] !== undefined
+      ? rowObject[header]
+      : '';
+  });
+
+  sheet
+    .getRange(rowNumber, 1, 1, headers.length)
+    .setValues([values]);
+}
+
+
+/* =====================================================
+   BASIC DROPDOWNS
+===================================================== */
+
+function getLevels_() {
+  const students = getSheetData_('Student_Master');
+
+  const levels = uniqueSorted_(
+    students
+      .map(student => extractLevel_(student.Class))
+      .filter(Boolean)
+  );
+
+  return {
+    success: true,
+    levels: levels
+  };
+}
+
+
+function getClasses_(payload) {
+  const level = cleanValue_(payload.level);
+
+  if (!level) {
+    throw new Error('Missing level.');
+  }
+
+  const students = getSheetData_('Student_Master');
+
+  const classes = uniqueSorted_(
+    students
+      .map(student => cleanValue_(student.Class))
+      .filter(className => {
+        return extractLevel_(className) === level;
+      })
+  );
+
+  return {
+    success: true,
+    classes: classes
+  };
+}
+
+
+function getGroupsByClass_(payload) {
+  const className = cleanValue_(payload.className);
+
+  if (!className) {
+    throw new Error('Missing className.');
+  }
+
+  const groups = uniqueSorted_(
+    getSheetData_('Student_Master')
+      .filter(student => {
+        return cleanValue_(student.Class) === className;
+      })
+      .map(student => cleanValue_(student.Group))
+      .filter(Boolean)
+  );
+
+  return {
+    success: true,
+    groups: groups,
+    groupNames: groups
+  };
+}
+
+
+/* =====================================================
+   ADMIN CSV UPLOAD
+===================================================== */
+
+function uploadStudentCsv_(payload) {
+  const csvText = String(payload.csvText || '');
+  const uploadedBy = cleanValue_(payload.uploadedBy);
+  const replaceExisting = Boolean(payload.replaceExisting);
+
+  if (!csvText) {
+    throw new Error('CSV content is empty.');
+  }
+
+  if (!uploadedBy) {
+    throw new Error('Uploaded By is required.');
+  }
+
+  const parsedRows = Utilities.parseCsv(csvText);
+
+  if (!parsedRows || parsedRows.length === 0) {
+    throw new Error('CSV contains no rows.');
+  }
+
+  const headerRowIndex = findStudentHeaderRow_(parsedRows);
+
+  if (headerRowIndex === -1) {
+    throw new Error(
+      'Could not find the CSV header row containing No, Name, ID, Class, Gender and DOB.'
+    );
+  }
+
+  const rawRows = parsedRows
+    .slice(headerRowIndex + 1)
+    .filter(row => {
+      return row.slice(0, 6).some(value => cleanValue_(value));
+    });
+
+  const students = rawRows.map(row => {
+    return {
+      No: row[0],
+      Name: cleanValue_(row[1]),
+      ID: cleanValue_(row[2]),
+      Class: cleanValue_(row[3]),
+      Gender: normaliseGenderForStorage_(row[4]),
+      DOB: parseCsvDate_(row[5]),
+      Group: ''
+    };
+  }).filter(student => {
+    return (
+      student.Name &&
+      student.ID &&
+      student.Class
+    );
+  });
+
+  if (students.length === 0) {
+    throw new Error('No valid pupils found in the CSV.');
+  }
+
+  const classNames = uniqueSorted_(
+    students.map(student => student.Class)
+  );
+
+  const existingStudents = getSheetData_('Student_Master');
+  const existingClasses = new Set(
+    existingStudents.map(student => cleanValue_(student.Class))
+  );
+
+  const duplicateClasses = classNames.filter(className => {
+    return existingClasses.has(className);
+  });
+
+  if (duplicateClasses.length > 0 && !replaceExisting) {
+    return {
+      success: false,
+      requiresConfirmation: true,
+      existingClasses: duplicateClasses,
+      error:
+        'Some classes already exist. Confirm replacement before uploading.'
+    };
+  }
+
+  classNames.forEach(className => {
+    const classStudents = students.filter(student => {
+      return student.Class === className;
+    });
+
+    assignFiveGroups_(classStudents, className);
+  });
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
+  const sheet = getSheet_('Student_Master');
+  const headers = APP_CONFIG.headers.Student_Master;
+
+  let keptRows = existingStudents;
+
+  if (replaceExisting) {
+    const uploadedClassSet = new Set(classNames);
+
+    keptRows = existingStudents.filter(student => {
+      return !uploadedClassSet.has(cleanValue_(student.Class));
+    });
+  }
+
+  const finalRows = keptRows.concat(students);
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  if (finalRows.length > 0) {
+    const values = finalRows.map(student => {
+      return headers.map(header => {
+        return student[header] !== undefined
+          ? student[header]
+          : '';
+      });
+    });
+
+    sheet
+      .getRange(2, 1, values.length, headers.length)
+      .setValues(values);
+  }
+
+  sheet.setFrozenRows(1);
+
+  classNames.forEach(className => {
+    appendRows_('Upload_Log', [{
+      Timestamp: new Date(),
+      Class: className,
+      Action: existingClasses.has(className)
+        ? 'Replace'
+        : 'Append',
+      'Rows Uploaded': students.filter(student => {
+        return student.Class === className;
+      }).length,
+      'Uploaded By': uploadedBy,
+      Remarks: ''
+    }]);
+  });
+
+CacheService
+  .getScriptCache()
+  .remove('stationSetupDataV2');
+
+  return {
+    success: true,
+    rowsUploaded: students.length,
+    classes: classNames,
+    message: 'Student list uploaded successfully.'
+  };
+}
+
+
+function findStudentHeaderRow_(rows) {
+  for (let index = 0; index < rows.length; index++) {
+    const firstSix = rows[index]
+      .slice(0, 6)
+      .map(value => cleanValue_(value).toLowerCase());
+
+    const expected = [
+      'no',
+      'name',
+      'id',
+      'class',
+      'gender',
+      'dob'
+    ];
+
+    const matches = expected.every((header, headerIndex) => {
+      return firstSix[headerIndex] === header;
+    });
+
+    if (matches) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+
+function assignFiveGroups_(students, className) {
+  const females = students
+    .filter(student => normaliseGenderCode_(student.Gender) === 'F')
+    .sort(sortByRegisterNo_);
+
+  const males = students
+    .filter(student => normaliseGenderCode_(student.Gender) === 'M')
+    .sort(sortByRegisterNo_);
+
+  const femaleGroupCount =
+    females.length === 0
+      ? 0
+      : Math.min(3, females.length);
+
+  const maleGroupCount =
+    males.length === 0
+      ? 0
+      : Math.min(2, males.length);
+
+  assignBalancedGroups_(
+    females,
+    femaleGroupCount,
+    className,
+    'FG'
+  );
+
+  assignBalancedGroups_(
+    males,
+    maleGroupCount,
+    className,
+    'MG'
+  );
+
+  const assignedCount =
+    femaleGroupCount + maleGroupCount;
+
+  if (assignedCount < 5) {
+    const remainingStudents = students
+      .filter(student => !student.Group)
+      .sort(sortByRegisterNo_);
+
+    remainingStudents.forEach((student, index) => {
+      student.Group =
+        className + '.G' + ((index % 5) + 1);
+    });
+  }
+}
+
+
+function assignBalancedGroups_(
+  students,
+  groupCount,
+  className,
+  prefix
+) {
+  if (groupCount <= 0) {
+    return;
+  }
+
+  const total = students.length;
+  const baseSize = Math.floor(total / groupCount);
+  const remainder = total % groupCount;
+
+  let startIndex = 0;
+
+  for (
+    let groupIndex = 0;
+    groupIndex < groupCount;
+    groupIndex++
+  ) {
+    const groupSize =
+      baseSize + (groupIndex < remainder ? 1 : 0);
+
+    const groupName =
+      className + '.' + prefix + (groupIndex + 1);
+
+    for (
+      let offset = 0;
+      offset < groupSize;
+      offset++
+    ) {
+      students[startIndex + offset].Group = groupName;
+    }
+
+    startIndex += groupSize;
+  }
+}
+
+
+/* =====================================================
+   STATION TESTER
+===================================================== */
+
+function getStationTesterData_(payload) {
+  const className = cleanValue_(payload.className);
+  const groupName = cleanValue_(payload.groupName);
+  const station = cleanValue_(payload.station);
+  const testDate = payload.testDate;
+
+  if (!className) {
+    throw new Error('Missing className.');
+  }
+
+  if (!groupName) {
+    throw new Error('Missing groupName.');
+  }
+
+  if (!station) {
+    throw new Error('Missing station.');
+  }
+
+  if (!testDate) {
+    throw new Error('Missing testDate.');
+  }
+
+  const students = getSheetData_('Student_Master')
+    .filter(student => {
+      return (
+        cleanValue_(student.Class) === className &&
+        cleanValue_(student.Group) === groupName
+      );
+    })
+    .sort(sortByRegisterNo_);
+
+  const existingResults = getSheetData_('Station_Results')
+    .filter(row => {
+      return (
+        cleanValue_(row.Class) === className &&
+        cleanValue_(row.Group) === groupName &&
+        normaliseTextKey_(row.Station) ===
+          normaliseTextKey_(station) &&
+        datesMatch_(row['Test Date'], testDate)
+      );
+    });
+
+  const existingByStudentId = new Map();
+
+  existingResults.forEach(result => {
+    existingByStudentId.set(
+      String(result.ID).trim(),
+      result
+    );
+  });
+
+  const outputStudents = students.map(student => {
+    const existing = existingByStudentId.get(
+      String(student.ID).trim()
+    );
+
+    const existingStatus = existing
+      ? cleanValue_(existing.Status)
+      : '';
+
+    const isAbsent =
+      existingStatus.toLowerCase() === 'absent';
+
+    return {
+      No: student.No,
+      ID: student.ID,
+      Name: student.Name,
+      Class: student.Class,
+      Group: student.Group,
+      Gender: student.Gender,
+      DOB: formatDateForFrontend_(student.DOB),
+
+      AgeUsed: calculateAgeUsed_(
+        student.DOB,
+        testDate
+      ),
+
+      ExistingScore:
+        existing && !isAbsent
+          ? existing.Score
+          : '',
+
+      ExistingGrade:
+        existing && !isAbsent
+          ? existing.Grade
+          : '',
+
+      ExistingStatus:
+        existingStatus,
+
+      ExistingAbsent:
+        isAbsent,
+
+      HasExistingResult:
+        Boolean(existing)
+    };
+  });
+
+  return {
+    success: true,
+    className: className,
+    groupName: groupName,
+    station: station,
+    testDate: testDate,
+    students: outputStudents
+  
+  }
+
+function getStationRubric_(payload) {
+  const station = cleanValue_(payload.station);
+
+  if (!station) {
+    throw new Error('Missing station.');
+  }
+
+  const rubric = getSheetData_('NAPFA_Rubric')
+    .filter(row => {
+      return normaliseTextKey_(row.Station) ===
+        normaliseTextKey_(station);
+    })
+    .map(row => ({
+      Station: row.Station,
+      Gender: row.Gender,
+      Age: Number(row.Age),
+      Grade: cleanValue_(row.Grade).toUpperCase(),
+      Min: row.Min,
+      Max: row.Max,
+      Unit: row.Unit
+    }));
+
+  return {
+    success: true,
+    station: station,
+    rubric: rubric
+  };
+
+
+function getExistingStationResults_(payload) {
+  const className = cleanValue_(payload.className);
+  const groupName = cleanValue_(payload.groupName);
+  const station = cleanValue_(payload.station);
+  const testDate = payload.testDate;
+
+  if (!className) throw new Error('Missing className.');
+  if (!groupName) throw new Error('Missing groupName.');
+  if (!station) throw new Error('Missing station.');
+  if (!testDate) throw new Error('Missing testDate.');
+
+  const results = getSheetData_('Station_Results')
+    .filter(row => {
+      return (
+        cleanValue_(row.Class) === className &&
+        cleanValue_(row.Group) === groupName &&
+        normaliseTextKey_(row.Station) ===
+          normaliseTextKey_(station) &&
+        datesMatch_(row['Test Date'], testDate)
+      );
+    })
+    .sort(sortByRegisterNo_);
+
+  return {
+    success: true,
+    results: results
+  };
+}
+
+
+function saveStationResultsBatch_(payload) {
+  setupSheets_();
+
+  const sessionId = cleanValue_(payload.sessionId);
+  const testDate = payload.testDate;
+  const className = cleanValue_(payload.className);
+  const groupName = cleanValue_(payload.groupName);
+  const station = cleanValue_(payload.station);
+  const tester = cleanValue_(payload.tester);
+
+  const results = Array.isArray(payload.results)
+    ? payload.results
+    : [];
+
+  if (!sessionId) {
+    throw new Error('Missing sessionId.');
+  }
+
+  if (!testDate) {
+    throw new Error('Missing testDate.');
+  }
+
+  if (!className) {
+    throw new Error('Missing className.');
+  }
+
+  if (!groupName) {
+    throw new Error('Missing groupName.');
+  }
+
+  if (!station) {
+    throw new Error('Missing station.');
+  }
+
+  if (!tester) {
+    throw new Error('Tester name is required.');
+  }
+
+  if (results.length === 0) {
+    throw new Error('No station results supplied.');
+  }
+
+  const allowedStations = [
+    'Sit-ups',
+    'Standing Broad Jump',
+    'Sit and Reach',
+    'Inclined Pull-up',
+    'Shuttle Run'
+  ];
+
+  if (!allowedStations.includes(station)) {
+    throw new Error('Invalid station: ' + station);
+  }
+
+  const studentsById = new Map();
+
+  getSheetData_('Student_Master').forEach(student => {
+    studentsById.set(
+      String(student.ID).trim(),
+      student
+    );
+  });
+
+  const preparedRows = [];
+
+  results.forEach(item => {
+    const studentId = String(item.ID || '').trim();
+    const student = studentsById.get(studentId);
+
+    if (!student) {
+      throw new Error(
+        'Student not found in Student_Master: ' +
+        studentId
+      );
+    }
+
+    if (cleanValue_(student.Class) !== className) {
+      throw new Error(
+        student.Name +
+        ' does not belong to ' +
+        className + '.'
+      );
+    }
+
+    if (cleanValue_(student.Group) !== groupName) {
+      throw new Error(
+        student.Name +
+        ' does not belong to ' +
+        groupName + '.'
+      );
+    }
+
+    const isAbsent = Boolean(item.absent);
+
+    const ageUsed = calculateAgeUsed_(
+      student.DOB,
+      testDate
+    );
+
+    if (isAbsent) {
+      preparedRows.push({
+        'Session ID': sessionId,
+        'Test Date': normaliseDateForStorage_(testDate),
+        'Class': className,
+        'Group': groupName,
+        'No': student.No,
+        'ID': student.ID,
+        'Name': student.Name,
+        'Gender': normaliseGenderForStorage_(student.Gender),
+        'DOB': normaliseDateForStorage_(student.DOB),
+        'Age Used': ageUsed,
+        'Station': station,
+        'Score': '',
+        'Grade': '',
+        'Status': 'Absent',
+        'Tester': tester,
+        'Remarks': ''
+      });
+
+      return;
+    }
+
+    const rawScore = item.score;
+
+    if (
+      rawScore === '' ||
+      rawScore === null ||
+      rawScore === undefined
+    ) {
+      throw new Error(
+        'Missing score for ' +
+        student.Name + '.'
+      );
+    }
+
+    const score = Number(rawScore);
+
+    if (Number.isNaN(score)) {
+      throw new Error(
+        'Invalid score for ' +
+        student.Name + '.'
+      );
+    }
+
+    validateStationScore_(
+      station,
+      score,
+      student.Name
+    );
+
+    const grade = calculateStationGrade_(
+      station,
+      student.Gender,
+      ageUsed,
+      score
+    );
+
+    preparedRows.push({
+      'Session ID': sessionId,
+      'Test Date': normaliseDateForStorage_(testDate),
+      'Class': className,
+      'Group': groupName,
+      'No': student.No,
+      'ID': student.ID,
+      'Name': student.Name,
+      'Gender': normaliseGenderForStorage_(student.Gender),
+      'DOB': normaliseDateForStorage_(student.DOB),
+      'Age Used': ageUsed,
+      'Station': station,
+      'Score': score,
+      'Grade': grade,
+      'Status': 'Completed',
+      'Tester': tester,
+      'Remarks': ''
+    });
+  });
+
+  const saveResult = upsertStationResultsBatch_(
+    preparedRows,
+    tester
+  );
+
+  return {
+    success: true,
+    message: 'Station results saved.',
+    created: saveResult.created,
+    updated: saveResult.updated,
+    totalSaved: preparedRows.length,
+
+    results: preparedRows.map(row => ({
+      ID: row.ID,
+      Name: row.Name,
+      Score: row.Score,
+      Grade: row.Grade,
+      Status: row.Status,
+      Absent: row.Status === 'Absent'
+    }))
+  };
+}
+
+
+function upsertStationResultsBatch_(newRows, editedBy) {
+  const sheet = getSheet_('Station_Results');
+  const headers = APP_CONFIG.headers.Station_Results;
+
+  const currentData = sheet.getDataRange().getValues();
+
+  const existingRows = currentData.length > 1
+    ? currentData.slice(1)
+    : [];
+
+  const existingMap = new Map();
+
+  existingRows.forEach((row, index) => {
+    const rowObject = {};
+
+    headers.forEach((header, columnIndex) => {
+      rowObject[header] = row[columnIndex];
+    });
+
+    existingMap.set(
+      stationResultKey_(rowObject),
+      {
+        index: index,
+        rowObject: rowObject
       }
+    );
+  });
+
+  let created = 0;
+  let updated = 0;
+
+  const editLogRows = [];
+
+  newRows.forEach(newRow => {
+    const key = stationResultKey_(newRow);
+    const existing = existingMap.get(key);
+
+    if (existing) {
+      const oldRow = existing.rowObject;
+
+      if (
+        String(oldRow.Score) !== String(newRow.Score)
+      ) {
+        editLogRows.push({
+          'Timestamp': new Date(),
+          'Session ID': newRow['Session ID'],
+          'ID': newRow.ID,
+          'Name': newRow.Name,
+          'Module': '5-Station NAPFA',
+          'Field Changed': 'Score',
+          'Old Value': oldRow.Score,
+          'New Value': newRow.Score,
+          'Edited By': editedBy
+        });
+      }
+
+      if (
+        String(oldRow.Status) !== String(newRow.Status)
+      ) {
+        editLogRows.push({
+          'Timestamp': new Date(),
+          'Session ID': newRow['Session ID'],
+          'ID': newRow.ID,
+          'Name': newRow.Name,
+          'Module': '5-Station NAPFA',
+          'Field Changed': 'Status',
+          'Old Value': oldRow.Status,
+          'New Value': newRow.Status,
+          'Edited By': editedBy
+        });
+      }
+
+      existingRows[existing.index] =
+        headers.map(header => {
+          return newRow[header] !== undefined
+            ? newRow[header]
+            : '';
+        });
+
+      updated++;
+
+    } else {
+      existingRows.push(
+        headers.map(header => {
+          return newRow[header] !== undefined
+            ? newRow[header]
+            : '';
+        })
+      );
+
+      created++;
+    }
+  });
+
+  sheet.clearContents();
+
+  sheet
+    .getRange(1, 1, 1, headers.length)
+    .setValues([headers]);
+
+  if (existingRows.length > 0) {
+    sheet
+      .getRange(
+        2,
+        1,
+        existingRows.length,
+        headers.length
+      )
+      .setValues(existingRows);
+  }
+
+  sheet.setFrozenRows(1);
+
+  if (editLogRows.length > 0) {
+    appendRows_(
+      'Edit_Log',
+      editLogRows
+    );
+  }
+
+  return {
+    created: created,
+    updated: updated
+  };
+}
+
+
+function stationResultKey_(row) {
+  return [
+    normaliseDateKey_(row['Test Date']),
+    String(row.ID || '').trim(),
+    normaliseTextKey_(row.Station)
+  ].join('|');
+}
+
+
+function calculateStationGrade_(
+  station,
+  gender,
+  age,
+  score
+) {
+  const genderCode = normaliseGenderCode_(gender);
+
+  const rubricRows = getSheetData_('NAPFA_Rubric')
+    .filter(row => {
+      return (
+        normaliseTextKey_(row.Station) ===
+          normaliseTextKey_(station) &&
+        normaliseGenderCode_(row.Gender) ===
+          genderCode &&
+        Number(row.Age) === Number(age)
+      );
+    });
+
+  const gradeOrder = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+  for (let index = 0; index < gradeOrder.length; index++) {
+    const grade = gradeOrder[index];
+
+    const row = rubricRows.find(item => {
+      return cleanValue_(item.Grade).toUpperCase() === grade;
+    });
+
+    if (!row) {
+      continue;
     }
 
-    @media (max-width: 650px) {
-      .page {
-        padding: 8px;
-      }
+    const hasMin =
+      row.Min !== '' &&
+      row.Min !== null &&
+      row.Min !== undefined;
 
-      .app-header {
-        padding: 15px;
-      }
+    const hasMax =
+      row.Max !== '' &&
+      row.Max !== null &&
+      row.Max !== undefined;
 
-      .app-header h1 {
-        font-size: 20px;
-      }
+    const min = Number(row.Min);
+    const max = Number(row.Max);
 
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .panel {
-        padding: 13px;
-      }
-
-      .tester-header {
-        margin: -13px -13px 12px;
-        padding: 11px 13px;
-      }
-
-      .student-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 7px;
-      }
-
-      .student-card {
-        padding: 9px;
-        border-radius: 15px;
-      }
-
-      .register-number {
-        font-size: 25px;
-      }
-
-      .student-name {
-        font-size: 10px;
-      }
-
-      .grade-badge {
-        min-width: 31px;
-        padding: 6px;
-        font-size: 16px;
-      }
-
-      .score-input {
-        min-height: 44px;
-        font-size: 20px;
-      }
-
-      .save-bar {
-        margin: 13px -13px -13px;
-        padding: 10px 13px;
-      }
+    if (
+      hasMin &&
+      hasMax &&
+      score >= min &&
+      score <= max
+    ) {
+      return grade;
     }
 
-    @media (max-width: 350px) {
-      .student-grid {
-        grid-template-columns: 1fr;
-      }
+    if (
+      hasMin &&
+      !hasMax &&
+      score >= min
+    ) {
+      return grade;
     }
-  </style>
-</head>
 
-<body>
-  <div id="loadingOverlay" class="loading-overlay hidden">
-    <div class="loading-card">
-      <div class="spinner"></div>
-      <strong id="loadingText">Loading...</strong>
-    </div>
-  </div>
+    if (
+      !hasMin &&
+      hasMax &&
+      score <= max
+    ) {
+      return grade;
+    }
+  }
 
-  <main class="page">
-    <header class="app-header">
-      <h1>BVPS NAPFA 5-Station Tester</h1>
-      <p>Enter scores quickly and save the whole group together</p>
-    </header>
+  return '';
+}
 
-    <nav class="progress">
-      <button id="progressSetup" class="progress-item active">1. Setup</button>
-      <button id="progressScores" class="progress-item">2. Scores</button>
-      <button id="progressReview" class="progress-item">3. Review</button>
-    </nav>
 
-    <section id="stepSetup" class="panel">
-      <h2>Tester Setup</h2>
+function validateStationScore_(station, score, studentName) {
+  const ranges = {
+    'Sit-ups': {
+      min: 0,
+      max: 100,
+      whole: true
+    },
 
-      <div class="form-grid">
-        <div class="field">
-          <label for="testDate">Test date</label>
-          <input id="testDate" type="date">
-        </div>
+    'Standing Broad Jump': {
+      min: 0,
+      max: 400,
+      whole: true
+    },
 
-        <div class="field">
-          <label for="testerName">Tester name</label>
-          <input
-            id="testerName"
-            type="text"
-            placeholder="Enter tester name"
-            autocomplete="name"
-          >
-        </div>
+    'Sit and Reach': {
+      min: -50,
+      max: 100,
+      whole: true
+    },
 
-        <div class="field">
-          <label for="levelSelect">Level</label>
-          <select id="levelSelect" onchange="loadClasses()">
-            <option value="">Select level</option>
-          </select>
-        </div>
+    'Inclined Pull-up': {
+      min: 0,
+      max: 100,
+      whole: true
+    },
 
-        <div class="field">
-          <label for="classSelect">Class</label>
-          <select id="classSelect" onchange="loadGroups()">
-            <option value="">Select class</option>
-          </select>
-        </div>
+    'Shuttle Run': {
+      min: 5,
+      max: 60,
+      whole: false
+    }
+  };
 
-        <div class="field">
-          <label for="groupSelect">Group</label>
-          <select id="groupSelect">
-            <option value="">Select group</option>
-          </select>
-        </div>
+  const range = ranges[station];
 
-        <div class="field">
-          <label for="stationSelect">Station</label>
-          <select id="stationSelect">
-            <option value="">Select station</option>
-          </select>
-        </div>
-      </div>
+  if (!range) {
+    throw new Error(
+      'Unknown station: ' + station
+    );
+  }
 
-      <div class="warning">
-        Existing results for the same pupil, date and station will be updated rather than duplicated.
-      </div>
+  if (
+    score < range.min ||
+    score > range.max
+  ) {
+    throw new Error(
+      'Score for ' + studentName +
+      ' must be between ' +
+      range.min + ' and ' + range.max + '.'
+    );
+  }
 
-      <div id="setupMessage" class="message"></div>
+  if (
+    range.whole &&
+    !Number.isInteger(score)
+  ) {
+    throw new Error(
+      station +
+      ' requires a whole-number score for ' +
+      studentName + '.'
+    );
+  }
+}
 
-      <div class="action-row">
-        <button class="btn btn-primary" onclick="loadTesterGroup()">
-          Load Group
-        </button>
-      </div>
-    </section>
 
-    <section id="stepScores" class="panel hidden">
-      <div class="tester-header">
-        <div id="testerTitle" class="tester-title"></div>
-        <div id="testerSubtitle" class="tester-subtitle"></div>
+/* =====================================================
+   RUN TIMING
+===================================================== */
 
-        <div class="progress-strip">
-          <div class="progress-box">
-            <span id="enteredCount" class="progress-number">0</span>
-            Entered
-          </div>
+function getRunStudentsByClass_(payload) {
+  const className = cleanValue_(payload.className);
 
-          <div class="progress-box">
-            <span id="missingCount" class="progress-number">0</span>
-            Missing
-          </div>
+  if (!className) {
+    throw new Error('Missing className.');
+  }
 
-          <div class="progress-box">
-            <span id="changedCount" class="progress-number">0</span>
-            Changed
-          </div>
-        </div>
-      </div>
+  const students = getSheetData_('Student_Master')
+    .filter(student => {
+      return cleanValue_(student.Class) === className;
+    })
+    .sort(sortByRegisterNo_);
 
-      <div class="information">
-        Enter each pupil’s score. Grades update immediately. Existing scores can be corrected before saving.
-      </div>
+  return {
+    success: true,
+    students: students.map(student => ({
+      No: student.No,
+      ID: student.ID,
+      Name: student.Name,
+      Class: student.Class,
+      Gender: student.Gender,
+      DOB: formatDateForFrontend_(student.DOB),
+      Group: student.Group
+    }))
+  };
+}
 
-      <div id="studentGrid" class="student-grid"></div>
 
-      <div class="save-bar">
-        <div id="saveBarMessage" class="save-bar-message">
-          No unsaved changes
-        </div>
+function saveRunSession_(payload) {
+  const sessionId = cleanValue_(payload.sessionId);
+  const testDate = payload.testDate;
+  const className = cleanValue_(payload.className);
+  const mode = cleanValue_(payload.mode);
+  const students = Array.isArray(payload.students)
+    ? payload.students
+    : [];
 
-        <button
-          id="saveResultsButton"
-          class="btn btn-primary"
-          onclick="saveGroupResults()"
-        >
-          Save Group Results
-        </button>
-      </div>
-    </section>
+  if (!sessionId) throw new Error('Missing sessionId.');
+  if (!testDate) throw new Error('Missing testDate.');
+  if (!className) throw new Error('Missing className.');
+  if (students.length === 0) {
+    throw new Error('No students supplied.');
+  }
 
-    <section id="stepReview" class="panel hidden">
-      <h2>Saved Results</h2>
+  clearRunSessionBySessionId_(sessionId);
 
-      <div id="reviewMessage" class="success-box"></div>
+  const rows = students.map(student => ({
+    'Session ID': sessionId,
+    'Test Date': normaliseDateForStorage_(testDate),
+    Mode: mode || '1.6km Run',
+    Class: className,
+    No: student.No,
+    ID: student.ID,
+    Name: student.Name,
+    Wave: student.Wave,
+    'Run Status': student.RunStatus || student.Wave
+  }));
 
-      <div class="review-table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>No.</th>
-              <th>Name</th>
-              <th>Score</th>
-              <th>Grade</th>
-              <th>Status</th>
-              <th>Remarks</th>
-            </tr>
-          </thead>
+  appendRows_('Run_Session', rows);
 
-          <tbody id="reviewBody"></tbody>
-        </table>
-      </div>
+  return {
+    success: true,
+    sessionId: sessionId,
+    rowsSaved: rows.length
+  };
+}
 
-      <div class="action-row">
-        <button class="btn btn-secondary" onclick="returnToScores()">
-          Edit Scores
-        </button>
 
-        <button class="btn btn-primary" onclick="startAnotherGroup()">
-          Test Another Group
-        </button>
-      </div>
-    </section>
-  </main>
+function clearRunSessionBySessionId_(sessionId) {
+  const sheet = getSheet_('Run_Session');
+  const data = sheet.getDataRange().getValues();
 
-  <script src="station-test.js"></script>
-</body>
-</html>
+  if (data.length <= 1) {
+    return 0;
+  }
+
+  const headers = data[0].map(cleanValue_);
+  const sessionIndex = headers.indexOf('Session ID');
+
+  const keptRows = [data[0]];
+  let removed = 0;
+
+  for (
+    let rowIndex = 1;
+    rowIndex < data.length;
+    rowIndex++
+  ) {
+    if (
+      String(data[rowIndex][sessionIndex]).trim() ===
+      String(sessionId).trim()
+    ) {
+      removed++;
+    } else {
+      keptRows.push(data[rowIndex]);
+    }
+  }
+
+  if (removed > 0) {
+    sheet.clearContents();
+
+    sheet
+      .getRange(
+        1,
+        1,
+        keptRows.length,
+        keptRows[0].length
+      )
+      .setValues(keptRows);
+
+    sheet.setFrozenRows(1);
+  }
+
+  return removed;
+}
+
+
+function saveRunFinish_(payload) {
+  const sessionId = cleanValue_(payload.sessionId);
+  const testDate = payload.testDate;
+  const className = cleanValue_(payload.className);
+  const wave = cleanValue_(payload.wave);
+  const student = payload.student || {};
+  const elapsedSeconds = Number(payload.elapsedSeconds);
+  const attemptNo = Number(payload.attemptNo || 1);
+  const remarks = cleanValue_(payload.remarks);
+
+  if (!sessionId) throw new Error('Missing sessionId.');
+  if (!student.ID) throw new Error('Missing student ID.');
+  if (Number.isNaN(elapsedSeconds)) {
+    throw new Error('Invalid elapsed time.');
+  }
+
+  const ageUsed = calculateAgeUsed_(
+    student.DOB,
+    testDate
+  );
+
+  const grade = calculateStationGrade_(
+    '1.6km Run',
+    student.Gender,
+    ageUsed,
+    elapsedSeconds
+  );
+
+  const row = {
+    'Session ID': sessionId,
+    'Test Date': normaliseDateForStorage_(testDate),
+    Class: className,
+    No: student.No,
+    ID: student.ID,
+    Name: student.Name,
+    Gender: normaliseGenderForStorage_(student.Gender),
+    DOB: normaliseDateForStorage_(student.DOB),
+    'Age Used': ageUsed,
+    Wave: wave,
+    'Attempt No': attemptNo,
+    Time: secondsToTimeText_(elapsedSeconds),
+    'Time Seconds': elapsedSeconds,
+    Grade: grade,
+    Status: 'Completed',
+    Remarks: remarks
+  };
+
+  upsertRunResult_(row);
+  updateRunSessionStatus_(sessionId, student.ID, 'Completed');
+
+  return {
+    success: true,
+    result: {
+      Time: row.Time,
+      TimeSeconds: elapsedSeconds,
+      Grade: grade,
+      Status: row.Status
+    }
+  };
+}
+
+
+function markRunStatus_(payload) {
+  const sessionId = cleanValue_(payload.sessionId);
+  const testDate = payload.testDate;
+  const className = cleanValue_(payload.className);
+  const wave = cleanValue_(payload.wave);
+  const student = payload.student || {};
+  const status = cleanValue_(payload.status);
+  const attemptNo = Number(payload.attemptNo || 1);
+  const remarks = cleanValue_(payload.remarks);
+
+  if (!sessionId) throw new Error('Missing sessionId.');
+  if (!student.ID) throw new Error('Missing student ID.');
+  if (!status) throw new Error('Missing status.');
+
+  const ageUsed = calculateAgeUsed_(
+    student.DOB,
+    testDate
+  );
+
+  const row = {
+    'Session ID': sessionId,
+    'Test Date': normaliseDateForStorage_(testDate),
+    Class: className,
+    No: student.No,
+    ID: student.ID,
+    Name: student.Name,
+    Gender: normaliseGenderForStorage_(student.Gender),
+    DOB: normaliseDateForStorage_(student.DOB),
+    'Age Used': ageUsed,
+    Wave: wave,
+    'Attempt No': attemptNo,
+    Time: '',
+    'Time Seconds': '',
+    Grade: '',
+    Status: status,
+    Remarks: remarks
+  };
+
+  upsertRunResult_(row);
+  updateRunSessionStatus_(sessionId, student.ID, status);
+
+  return {
+    success: true,
+    status: status
+  };
+}
+
+
+function upsertRunResult_(newRow) {
+  const rows = getSheetData_('Run_Results');
+
+  const existing = rows.find(row => {
+    return (
+      cleanValue_(row['Session ID']) ===
+        cleanValue_(newRow['Session ID']) &&
+      String(row.ID).trim() ===
+        String(newRow.ID).trim() &&
+      Number(row['Attempt No']) ===
+        Number(newRow['Attempt No'])
+    );
+  });
+
+  if (existing) {
+    updateSheetRow_(
+      'Run_Results',
+      existing._rowNumber,
+      newRow
+    );
+  } else {
+    appendRows_('Run_Results', [newRow]);
+  }
+}
+
+
+function saveNotRunningReasons_(payload) {
+  const sessionId = cleanValue_(payload.sessionId);
+  const testDate = payload.testDate;
+  const className = cleanValue_(payload.className);
+  const pupils = Array.isArray(payload.pupils)
+    ? payload.pupils
+    : [];
+
+  if (!sessionId) throw new Error('Missing sessionId.');
+  if (pupils.length === 0) {
+    throw new Error('No Not Running pupils supplied.');
+  }
+
+  const allowedStatuses = [
+    'Absent',
+    'Did Not Start',
+    'Medical',
+    'Injured',
+    'Retest Needed',
+    'Not Running'
+  ];
+
+  const rows = pupils.map(item => {
+    const student = item.student || {};
+    const status = cleanValue_(item.status);
+
+    if (!allowedStatuses.includes(status)) {
+      throw new Error(
+        'Invalid Not Running reason for ' +
+        (student.Name || student.ID)
+      );
+    }
+
+    return {
+      'Session ID': sessionId,
+      'Test Date': normaliseDateForStorage_(testDate),
+      Class: className,
+      No: student.No,
+      ID: student.ID,
+      Name: student.Name,
+      Gender: normaliseGenderForStorage_(student.Gender),
+      DOB: normaliseDateForStorage_(student.DOB),
+      'Age Used': calculateAgeUsed_(student.DOB, testDate),
+      Wave: 'Not Running',
+      'Attempt No': 1,
+      Time: '',
+      'Time Seconds': '',
+      Grade: '',
+      Status: status,
+      Remarks: cleanValue_(item.remarks)
+    };
+  });
+
+  rows.forEach(row => {
+    upsertRunResult_(row);
+    updateRunSessionStatus_(
+      sessionId,
+      row.ID,
+      row.Status
+    );
+  });
+
+  return {
+    success: true,
+    rowsSaved: rows.length
+  };
+}
+
+
+function getRunWaveSummary_(payload) {
+  const sessionId = cleanValue_(payload.sessionId);
+  const wave = cleanValue_(payload.wave);
+
+  if (!sessionId) throw new Error('Missing sessionId.');
+  if (!wave) throw new Error('Missing wave.');
+
+  const results = getSheetData_('Run_Results')
+    .filter(row => {
+      return (
+        cleanValue_(row['Session ID']) === sessionId &&
+        cleanValue_(row.Wave) === wave
+      );
+    })
+    .sort((a, b) => {
+      const aTime = Number(a['Time Seconds']);
+      const bTime = Number(b['Time Seconds']);
+
+      if (
+        !Number.isNaN(aTime) &&
+        !Number.isNaN(bTime)
+      ) {
+        return aTime - bTime;
+      }
+
+      return Number(a.No) - Number(b.No);
+    });
+
+  return {
+    success: true,
+    results: results.map(row => ({
+      No: row.No,
+      ID: row.ID,
+      Name: row.Name,
+      Time: row.Time,
+      TimeSeconds: row['Time Seconds'],
+      Grade: row.Grade,
+      Status: row.Status,
+      Remarks: row.Remarks,
+      Wave: row.Wave
+    }))
+  };
+}
+
+
+function deleteRunResult_(payload) {
+  const sessionId = cleanValue_(payload.sessionId);
+  const studentId = String(payload.studentId || '').trim();
+  const attemptNo = Number(payload.attemptNo || 1);
+
+  const sheet = getSheet_('Run_Results');
+  const data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    return {
+      success: true,
+      deletedRows: 0
+    };
+  }
+
+  const headers = data[0].map(cleanValue_);
+  const sessionIndex = headers.indexOf('Session ID');
+  const idIndex = headers.indexOf('ID');
+  const attemptIndex = headers.indexOf('Attempt No');
+
+  const keptRows = [data[0]];
+  let deletedRows = 0;
+
+  for (
+    let rowIndex = 1;
+    rowIndex < data.length;
+    rowIndex++
+  ) {
+    const matches =
+      cleanValue_(data[rowIndex][sessionIndex]) === sessionId &&
+      String(data[rowIndex][idIndex]).trim() === studentId &&
+      Number(data[rowIndex][attemptIndex]) === attemptNo;
+
+    if (matches) {
+      deletedRows++;
+    } else {
+      keptRows.push(data[rowIndex]);
+    }
+  }
+
+  if (deletedRows > 0) {
+    sheet.clearContents();
+
+    sheet
+      .getRange(
+        1,
+        1,
+        keptRows.length,
+        keptRows[0].length
+      )
+      .setValues(keptRows);
+
+    sheet.setFrozenRows(1);
+  }
+
+  updateRunSessionStatus_(sessionId, studentId, '');
+
+  return {
+    success: true,
+    deletedRows: deletedRows
+  };
+}
+
+
+function updateRunSessionStatus_(
+  sessionId,
+  studentId,
+  status
+) {
+  const sheet = getSheet_('Run_Session');
+  const data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    return;
+  }
+
+  const headers = data[0].map(cleanValue_);
+  const sessionIndex = headers.indexOf('Session ID');
+  const idIndex = headers.indexOf('ID');
+  const statusIndex = headers.indexOf('Run Status');
+
+  let changed = false;
+
+  for (
+    let rowIndex = 1;
+    rowIndex < data.length;
+    rowIndex++
+  ) {
+    if (
+      cleanValue_(data[rowIndex][sessionIndex]) ===
+        cleanValue_(sessionId) &&
+      String(data[rowIndex][idIndex]).trim() ===
+        String(studentId).trim()
+    ) {
+      data[rowIndex][statusIndex] = status;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    sheet.getDataRange().setValues(data);
+  }
+}
+
+
+function completeRunSession_(payload) {
+  const sessionId = cleanValue_(payload.sessionId);
+
+  if (!sessionId) {
+    throw new Error('Missing sessionId.');
+  }
+
+  const sheet = getSheet_('Run_Session');
+  const data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    throw new Error('Run session not found.');
+  }
+
+  const headers = data[0].map(cleanValue_);
+  const sessionIndex = headers.indexOf('Session ID');
+  const statusIndex = headers.indexOf('Run Status');
+
+  let updatedRows = 0;
+
+  for (
+    let rowIndex = 1;
+    rowIndex < data.length;
+    rowIndex++
+  ) {
+    if (
+      cleanValue_(data[rowIndex][sessionIndex]) ===
+      sessionId
+    ) {
+      const currentStatus =
+        cleanValue_(data[rowIndex][statusIndex]);
+
+      if (
+        currentStatus === 'Wave 1' ||
+        currentStatus === 'Wave 2' ||
+        currentStatus === ''
+      ) {
+        data[rowIndex][statusIndex] =
+          'Session Completed';
+      }
+
+      updatedRows++;
+    }
+  }
+
+  if (updatedRows === 0) {
+    throw new Error('No matching session rows found.');
+  }
+
+  sheet.getDataRange().setValues(data);
+
+  return {
+    success: true,
+    sessionId: sessionId,
+    rowsUpdated: updatedRows
+  };
+}
+
+
+/* =====================================================
+   GENERAL HELPERS
+===================================================== */
+
+function cleanValue_(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value).trim();
+}
+
+
+function normaliseTextKey_(value) {
+  return cleanValue_(value)
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+
+function normaliseGenderCode_(value) {
+  const text = cleanValue_(value).toUpperCase();
+
+  if (text === 'F' || text === 'FEMALE') {
+    return 'F';
+  }
+
+  if (text === 'M' || text === 'MALE') {
+    return 'M';
+  }
+
+  return text;
+}
+
+
+function normaliseGenderForStorage_(value) {
+  const code = normaliseGenderCode_(value);
+
+  if (code === 'F') {
+    return 'Female';
+  }
+
+  if (code === 'M') {
+    return 'Male';
+  }
+
+  return cleanValue_(value);
+}
+
+
+function extractLevel_(className) {
+  const match = cleanValue_(className).match(/^P\d+/i);
+
+  return match
+    ? match[0].toUpperCase()
+    : '';
+}
+
+
+function uniqueSorted_(values) {
+  return [...new Set(values)].sort((a, b) => {
+    return String(a).localeCompare(
+      String(b),
+      undefined,
+      {
+        numeric: true,
+        sensitivity: 'base'
+      }
+    );
+  });
+}
+
+
+function sortByRegisterNo_(a, b) {
+  return Number(a.No) - Number(b.No);
+}
+
+
+function calculateAgeUsed_(dobValue, testDateValue) {
+  const dob = parseDate_(dobValue);
+  const testDate = parseDate_(testDateValue);
+
+  if (!dob || !testDate) {
+    return '';
+  }
+
+  let age =
+    testDate.getFullYear() -
+    dob.getFullYear();
+
+  const birthdayPassed =
+    testDate.getMonth() > dob.getMonth() ||
+    (
+      testDate.getMonth() === dob.getMonth() &&
+      testDate.getDate() >= dob.getDate()
+    );
+
+  if (!birthdayPassed) {
+    age--;
+  }
+
+  return age;
+}
+
+
+function parseDate_(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (
+    Object.prototype.toString.call(value) ===
+    '[object Date]' &&
+    !Number.isNaN(value.getTime())
+  ) {
+    return value;
+  }
+
+  const text = cleanValue_(value);
+
+  const yyyyMmDd =
+    text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+
+  if (yyyyMmDd) {
+    return new Date(
+      Number(yyyyMmDd[1]),
+      Number(yyyyMmDd[2]) - 1,
+      Number(yyyyMmDd[3])
+    );
+  }
+
+  const slashDate =
+    text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (slashDate) {
+    const first = Number(slashDate[1]);
+    const second = Number(slashDate[2]);
+    const year = Number(slashDate[3]);
+
+    return new Date(
+      year,
+      second - 1,
+      first
+    );
+  }
+
+  const parsed = new Date(text);
+
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : parsed;
+}
+
+
+function parseCsvDate_(value) {
+  const parsed = parseDate_(value);
+
+  return parsed || cleanValue_(value);
+}
+
+
+function normaliseDateForStorage_(value) {
+  const date = parseDate_(value);
+
+  return date || cleanValue_(value);
+}
+
+
+function formatDateForFrontend_(value) {
+  const date = parseDate_(value);
+
+  if (!date) {
+    return cleanValue_(value);
+  }
+
+  return Utilities.formatDate(
+    date,
+    Session.getScriptTimeZone(),
+    'yyyy-MM-dd'
+  );
+}
+
+
+function normaliseDateKey_(value) {
+  const date = parseDate_(value);
+
+  if (!date) {
+    return cleanValue_(value);
+  }
+
+  return Utilities.formatDate(
+    date,
+    Session.getScriptTimeZone(),
+    'yyyy-MM-dd'
+  );
+}
+
+
+function datesMatch_(dateA, dateB) {
+  return (
+    normaliseDateKey_(dateA) ===
+    normaliseDateKey_(dateB)
+  );
+}
+
+
+function secondsToTimeText_(totalSeconds) {
+  const safeSeconds =
+    Math.max(0, Math.round(Number(totalSeconds)));
+
+  const minutes =
+    Math.floor(safeSeconds / 60);
+
+  const seconds =
+    safeSeconds % 60;
+
+  return (
+    String(minutes).padStart(2, '0') +
+    ':' +
+    String(seconds).padStart(2, '0')
+  );
+}
+
+
+function jsonResponse_(object) {
+  return ContentService
+    .createTextOutput(JSON.stringify(object))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function getStationSetupData_() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'stationSetupDataV2';
+
+  const cached = cache.get(cacheKey);
+
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  const students = getSheetData_('Student_Master');
+
+  const levelSet = new Set();
+  const classesByLevelSets = {};
+  const groupsByClassSets = {};
+
+  students.forEach(student => {
+    const className = cleanValue_(student.Class);
+    const groupName = cleanValue_(student.Group);
+    const level = extractLevel_(className);
+
+    if (!className || !level) {
+      return;
+    }
+
+    levelSet.add(level);
+
+    if (!classesByLevelSets[level]) {
+      classesByLevelSets[level] = new Set();
+    }
+
+    classesByLevelSets[level].add(className);
+
+    if (!groupsByClassSets[className]) {
+      groupsByClassSets[className] = new Set();
+    }
+
+    if (groupName) {
+      groupsByClassSets[className].add(groupName);
+    }
+  });
+
+  const levels = Array.from(levelSet).sort(naturalSort_);
+
+  const classesByLevel = {};
+
+  Object.keys(classesByLevelSets).forEach(level => {
+    classesByLevel[level] =
+      Array.from(classesByLevelSets[level]).sort(naturalSort_);
+  });
+
+  const groupsByClass = {};
+
+  Object.keys(groupsByClassSets).forEach(className => {
+    groupsByClass[className] =
+      Array.from(groupsByClassSets[className]).sort(naturalSort_);
+  });
+
+  const result = {
+    success: true,
+    levels: levels,
+    classesByLevel: classesByLevel,
+    groupsByClass: groupsByClass
+  };
+
+  cache.put(
+    cacheKey,
+    JSON.stringify(result),
+    21600
+  );
+
+  return result;
+}
+
+
+function naturalSort_(a, b) {
+  return String(a).localeCompare(
+    String(b),
+    undefined,
+    {
+      numeric: true,
+      sensitivity: 'base'
+    }
+  );
+}
