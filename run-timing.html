@@ -15,32 +15,23 @@
       --navy: #173b73;
       --navy-dark: #102b56;
       --blue-light: #eaf1ff;
-
       --green: #23875d;
       --green-light: #ddf7ea;
-
       --red: #c43d4f;
       --red-light: #ffe7ea;
-
       --amber: #a56600;
       --amber-light: #fff3d5;
-
       --grey-50: #f7f8fb;
       --grey-100: #eef1f5;
       --grey-200: #dce1e8;
       --grey-500: #687386;
       --grey-800: #263142;
-
       --shadow: 0 5px 18px rgba(20, 39, 73, 0.09);
     }
 
     * {
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
-    }
-
-    html {
-      scroll-behaviour: smooth;
     }
 
     body {
@@ -56,7 +47,9 @@
       font: inherit;
     }
 
-    button {
+    button,
+    .assignment-circle,
+    .runner-circle {
       touch-action: manipulation;
     }
 
@@ -106,7 +99,6 @@
       color: var(--grey-500);
       font-size: 12px;
       font-weight: 700;
-      cursor: default;
     }
 
     .progress-item.active {
@@ -169,24 +161,23 @@
       font-weight: 700;
     }
 
-    .information {
+    .information,
+    .warning {
       margin: 12px 0;
       padding: 12px;
-      border-left: 5px solid var(--navy);
       border-radius: 12px;
-      background: var(--blue-light);
       line-height: 1.45;
       font-size: 14px;
     }
 
+    .information {
+      border-left: 5px solid var(--navy);
+      background: var(--blue-light);
+    }
+
     .warning {
-      margin: 12px 0;
-      padding: 12px;
       border-left: 5px solid #e09a20;
-      border-radius: 12px;
       background: var(--amber-light);
-      line-height: 1.45;
-      font-size: 14px;
     }
 
     .action-row {
@@ -253,14 +244,16 @@
       color: var(--navy);
     }
 
-    .assignment-grid {
+    .assignment-grid,
+    .runner-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
       gap: 10px;
       margin-top: 14px;
     }
 
-    .assignment-circle {
+    .assignment-circle,
+    .runner-circle {
       aspect-ratio: 1;
       width: 100%;
       max-width: 128px;
@@ -276,8 +269,7 @@
       text-align: center;
       user-select: none;
       cursor: pointer;
-      touch-action: manipulation;
-      transition: transform 0.1s, background 0.1s;
+      transition: transform 0.1s;
     }
 
     .assignment-circle:active,
@@ -301,7 +293,7 @@
     }
 
     .circle-no {
-      font-size: 24px;
+      font-size: 21px;
       line-height: 1;
       font-weight: 900;
     }
@@ -309,7 +301,7 @@
     .circle-name {
       width: 100%;
       margin-top: 5px;
-      font-size: 11px;
+      font-size: 10px;
       line-height: 1.12;
       font-weight: 700;
       overflow-wrap: anywhere;
@@ -333,7 +325,6 @@
       border-radius: 20px 20px 16px 16px;
       background: rgba(255, 255, 255, 0.97);
       box-shadow: 0 5px 15px rgba(20, 39, 73, 0.1);
-      backdrop-filter: blur(8px);
     }
 
     .timing-title-row {
@@ -378,32 +369,8 @@
       font-weight: 700;
     }
 
-    .runner-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(102px, 1fr));
-      gap: 10px;
-    }
-
     .runner-item {
       text-align: center;
-    }
-
-    .runner-circle {
-      aspect-ratio: 1;
-      width: 100%;
-      max-width: 124px;
-      margin: auto;
-      padding: 8px;
-      border: 3px solid var(--grey-200);
-      border-radius: 50%;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      user-select: none;
-      touch-action: manipulation;
     }
 
     .runner-circle.captured {
@@ -423,7 +390,7 @@
 
     .runner-position {
       margin-top: 4px;
-      font-size: 14px;
+      font-size: 19px;
       font-weight: 900;
     }
 
@@ -449,10 +416,6 @@
       background: var(--grey-50);
     }
 
-    .recent-finishes strong {
-      color: var(--navy);
-    }
-
     .recent-entry {
       padding: 5px 0;
       border-bottom: 1px solid var(--grey-200);
@@ -461,7 +424,7 @@
 
     .remaining-row {
       display: grid;
-      grid-template-columns: 48px 1fr minmax(150px, 220px) auto;
+      grid-template-columns: 48px 1fr minmax(150px, 220px);
       gap: 8px;
       align-items: center;
       padding: 9px 0;
@@ -506,9 +469,9 @@
       white-space: nowrap;
     }
 
-    .final-status {
+    .success-box {
       margin-top: 16px;
-      padding: 13px;
+      padding: 14px;
       border-radius: 13px;
       background: var(--green-light);
       color: var(--green);
@@ -593,14 +556,6 @@
         max-width: none;
       }
 
-      .circle-no {
-        font-size: 22px;
-      }
-
-      .circle-name {
-        font-size: 9px;
-      }
-
       .timer {
         font-size: 43px;
       }
@@ -615,8 +570,7 @@
         grid-template-columns: 40px 1fr;
       }
 
-      .remaining-row .status-select,
-      .remaining-row .btn {
+      .remaining-row .status-select {
         grid-column: 1 / -1;
       }
     }
@@ -641,7 +595,7 @@
   <main class="page">
     <header class="app-header">
       <h1>BVPS NAPFA 1.6 km Run</h1>
-      <p>Phone-first run assignment and timing</p>
+      <p>Assign runners, capture timings and review both waves</p>
     </header>
 
     <nav class="progress">
@@ -651,7 +605,6 @@
       <button id="progressReview" class="progress-item">4. Review</button>
     </nav>
 
-    <!-- STEP 1: SETUP -->
     <section id="stepSetup" class="panel">
       <h2>Setup</h2>
 
@@ -677,8 +630,7 @@
       </div>
 
       <div class="warning">
-        Do not close the page during a run or while timings are still saving.
-        The app will warn you if unsaved work remains.
+        Keep this page open during timing and while saves are pending.
       </div>
 
       <div id="setupMessage" class="message"></div>
@@ -690,14 +642,13 @@
       </div>
     </section>
 
-    <!-- STEP 2A: WAVE 1 ASSIGNMENT -->
     <section id="stepWave1Assignment" class="panel hidden">
       <h2>Select Wave 1</h2>
 
       <div class="information">
         <strong>Single tap:</strong> select or deselect Wave 1.<br>
         <strong>Triple tap:</strong> mark or unmark Not Running.<br>
-        Pupils left unassigned will be available for Wave 2.
+        Pupils left unassigned will be shown during Wave 2 selection.
       </div>
 
       <div class="count-grid">
@@ -726,15 +677,14 @@
       </div>
     </section>
 
-    <!-- STEP 2B: WAVE 2 ASSIGNMENT -->
     <section id="stepWave2Assignment" class="panel hidden">
       <h2>Select Wave 2</h2>
 
       <div class="information">
-        Wave 1 pupils are already confirmed.<br>
+        Wave 1 pupils are locked.<br>
         <strong>Single tap:</strong> select or deselect Wave 2.<br>
         <strong>Triple tap:</strong> mark or unmark Not Running.<br>
-        Every remaining pupil must be assigned to Wave 2 or marked Not Running.
+        Every remaining pupil must be assigned or marked Not Running.
       </div>
 
       <div class="count-grid">
@@ -762,20 +712,16 @@
         </button>
 
         <button class="btn btn-primary" onclick="confirmAllAssignments()">
-          Confirm Assignments and Prepare Wave 1
+          Confirm Assignments
         </button>
       </div>
     </section>
 
-    <!-- STEP 3: TIMING -->
     <section id="stepTiming" class="panel hidden">
       <div class="timing-header">
         <div class="timing-title-row">
           <div id="currentWaveLabel" class="wave-label">Wave 1</div>
-
-          <div id="runnerCountLabel">
-            0 pupils
-          </div>
+          <div id="runnerCountLabel">0 pupils</div>
         </div>
 
         <div id="timerDisplay" class="timer">00:00</div>
@@ -800,7 +746,7 @@
       </div>
 
       <div class="information">
-        Tap a pupil once when they finish. Tap a captured pupil again to undo after confirmation.
+        Tap once when a pupil finishes. Tap a captured pupil again to undo after confirmation.
       </div>
 
       <div class="recent-finishes">
@@ -811,16 +757,26 @@
       <div id="runnerGrid" class="runner-grid"></div>
     </section>
 
-    <!-- STEP 4A: WAVE REVIEW -->
     <section id="stepWaveReview" class="panel hidden">
-      <h2 id="waveReviewHeading">Wave 1 Review</h2>
+      <h2 id="waveReviewHeading">Wave Review</h2>
 
       <div id="waveReviewMessage" class="message"></div>
 
       <h3>Pupils without a finish time</h3>
       <div id="remainingPupils"></div>
 
+      <div class="action-row">
+        <button
+          id="saveAllWaveStatusesButton"
+          class="btn btn-secondary"
+          onclick="saveAllRemainingStatuses()"
+        >
+          Save All Statuses
+        </button>
+      </div>
+
       <h3>Results</h3>
+
       <div class="table-scroll">
         <table>
           <thead>
@@ -842,15 +798,15 @@
       </div>
     </section>
 
-    <!-- STEP 4B: FINAL REVIEW -->
     <section id="stepFinalReview" class="panel hidden">
       <h2>All Run Results</h2>
 
       <div class="information">
-        Check both waves below. Do not leave this page until the save queue shows no pending saves.
+        Check both wave tables. Save Not Running reasons before completing the session.
       </div>
 
       <h3>Wave 1</h3>
+
       <div class="table-scroll">
         <table>
           <thead>
@@ -868,6 +824,7 @@
       </div>
 
       <h3>Wave 2</h3>
+
       <div class="table-scroll">
         <table>
           <thead>
@@ -887,7 +844,13 @@
       <h3>Not Running</h3>
       <div id="notRunningList"></div>
 
-      <div id="finalSaveMessage" class="final-status hidden"></div>
+      <div class="action-row">
+        <button class="btn btn-secondary" onclick="saveAllNotRunningReasons()">
+          Save All Not Running Reasons
+        </button>
+      </div>
+
+      <div id="completionMessage" class="success-box hidden"></div>
 
       <div class="action-row">
         <button id="finishSessionButton" class="btn btn-primary" onclick="finishRunSession()">
