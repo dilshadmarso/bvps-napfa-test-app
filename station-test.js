@@ -1,4 +1,4 @@
-const GOOGLE_APPS_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
+const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec";
 
 const LOCAL_DRAFT_KEY =
   "BVPS_NAPFA_STATION_DRAFT_V1";
