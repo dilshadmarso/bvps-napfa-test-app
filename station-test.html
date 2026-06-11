@@ -1,2204 +1,783 @@
-const APP_CONFIG = {
-  spreadsheetName: 'BVPS NAPFA Test App Data',
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
 
-  sheets: [
-    'Student_Master',
-    'NAPFA_Rubric',
-    'Award_Rules',
-    'Station_Results',
-    'Run_Session',
-    'Run_Results',
-    'Edit_Log',
-    'Upload_Log',
-    'Download_Log'
-  ],
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  >
 
-  headers: {
-    Student_Master: [
-      'No',
-      'Name',
-      'ID',
-      'Class',
-      'Gender',
-      'DOB',
-      'Group'
-    ],
+  <title>BVPS NAPFA 5-Station Tester</title>
 
-    NAPFA_Rubric: [
-      'Station',
-      'Gender',
-      'Age',
-      'Grade',
-      'Min',
-      'Max',
-      'Unit'
-    ],
+  <style>
+    :root {
+      --navy: #173b73;
+      --navy-dark: #102b56;
+      --blue-light: #eaf1ff;
 
-    Award_Rules: [
-      'Grade',
-      'Points'
-    ],
+      --green: #23875d;
+      --green-light: #ddf7ea;
 
-    Station_Results: [
-      'Session ID',
-      'Test Date',
-      'Class',
-      'Group',
-      'No',
-      'ID',
-      'Name',
-      'Gender',
-      'DOB',
-      'Age Used',
-      'Station',
-      'Score',
-      'Grade',
-      'Status',
-      'Tester',
-      'Remarks'
-    ],
+      --red: #bd3748;
+      --red-light: #ffe8eb;
 
-    Run_Session: [
-      'Session ID',
-      'Test Date',
-      'Mode',
-      'Class',
-      'No',
-      'ID',
-      'Name',
-      'Wave',
-      'Run Status'
-    ],
+      --amber: #996000;
+      --amber-light: #fff2d3;
 
-    Run_Results: [
-      'Session ID',
-      'Test Date',
-      'Class',
-      'No',
-      'ID',
-      'Name',
-      'Gender',
-      'DOB',
-      'Age Used',
-      'Wave',
-      'Attempt No',
-      'Time',
-      'Time Seconds',
-      'Grade',
-      'Status',
-      'Remarks'
-    ],
+      --grey-50: #f7f8fb;
+      --grey-100: #eef1f5;
+      --grey-200: #dce1e8;
+      --grey-400: #9aa4b2;
+      --grey-500: #687386;
+      --grey-800: #263142;
 
-    Edit_Log: [
-      'Timestamp',
-      'Session ID',
-      'ID',
-      'Name',
-      'Module',
-      'Field Changed',
-      'Old Value',
-      'New Value',
-      'Edited By'
-    ],
-
-    Upload_Log: [
-      'Timestamp',
-      'Class',
-      'Action',
-      'Rows Uploaded',
-      'Uploaded By',
-      'Remarks'
-    ],
-
-    Download_Log: [
-      'Timestamp',
-      'Download Type',
-      'Class',
-      'Test Date',
-      'Downloaded By',
-      'Rows Downloaded'
-    ]
-  }
-};
-
-
-/* =====================================================
-   WEB APP ROUTER
-===================================================== */
-
-function doGet() {
-  return jsonResponse_({
-    success: true,
-    message: 'BVPS NAPFA backend is running.'
-  });
-}
-
-
-function doPost(e) {
-  try {
-    setupSheets_();
-
-    if (!e || !e.postData || !e.postData.contents) {
-      throw new Error('No request body received.');
+      --shadow: 0 5px 18px rgba(20, 39, 73, 0.09);
     }
 
-    const payload = JSON.parse(e.postData.contents);
-    const action = cleanValue_(payload.action);
-
-    switch (action) {
-      case 'setupSheets':
-        setupSheets_();
-        return jsonResponse_({
-          success: true,
-          message: 'Sheets checked and prepared.'
-        });
-
-      case 'getLevels':
-        return jsonResponse_(getLevels_());
-
-      case 'getClasses':
-        return jsonResponse_(getClasses_(payload));
-
-      case 'getGroupsByClass':
-        return jsonResponse_(getGroupsByClass_(payload));
-
-      case 'uploadStudentCsv':
-        return jsonResponse_(uploadStudentCsv_(payload));
-
-      case 'getStationTesterData':
-        return jsonResponse_(getStationTesterData_(payload));
-
-      case 'getStationRubric':
-        return jsonResponse_(getStationRubric_(payload));
-
-      case 'getExistingStationResults':
-        return jsonResponse_(getExistingStationResults_(payload));
-
-      case 'saveStationResultsBatch':
-        return jsonResponse_(saveStationResultsBatch_(payload));
-
-      case 'getRunStudentsByClass':
-        return jsonResponse_(getRunStudentsByClass_(payload));
-
-      case 'saveRunSession':
-        return jsonResponse_(saveRunSession_(payload));
-
-      case 'saveRunFinish':
-        return jsonResponse_(saveRunFinish_(payload));
-
-      case 'markRunStatus':
-        return jsonResponse_(markRunStatus_(payload));
-
-      case 'saveNotRunningReasons':
-        return jsonResponse_(saveNotRunningReasons_(payload));
-
-      case 'getRunWaveSummary':
-        return jsonResponse_(getRunWaveSummary_(payload));
-
-      case 'deleteRunResult':
-        return jsonResponse_(deleteRunResult_(payload));
-
-      case 'completeRunSession':
-        return jsonResponse_(completeRunSession_(payload));
-
-      case 'getStationSetupData':
-        return jsonResponse_(getStationSetupData_(payload));
-
-      default:
-        throw new Error('Unknown action: ' + action);
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
     }
 
-  } catch (error) {
-    return jsonResponse_({
-      success: false,
-      error: error.message,
-      stack: error.stack || ''
-    });
-  }
-}
-
-
-/* =====================================================
-   SHEET SETUP
-===================================================== */
-
-function setupSheets_() {
-  const spreadsheet = getSpreadsheet_();
-
-  APP_CONFIG.sheets.forEach(sheetName => {
-    let sheet = spreadsheet.getSheetByName(sheetName);
-
-    if (!sheet) {
-      sheet = spreadsheet.insertSheet(sheetName);
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--grey-50);
+      color: var(--grey-800);
     }
 
-    const headers = APP_CONFIG.headers[sheetName];
-
-    if (!headers) {
-      return;
+    button,
+    input,
+    select {
+      font: inherit;
     }
 
-    const currentLastColumn = sheet.getLastColumn();
-
-    let currentHeaders = [];
-
-    if (currentLastColumn > 0) {
-      currentHeaders = sheet
-        .getRange(1, 1, 1, currentLastColumn)
-        .getValues()[0]
-        .map(cleanValue_);
+    button {
+      touch-action: manipulation;
     }
 
-    const headersMatch =
-      currentHeaders.length === headers.length &&
-      headers.every((header, index) => {
-        return currentHeaders[index] === header;
-      });
-
-    if (!headersMatch) {
-      sheet
-        .getRange(1, 1, 1, headers.length)
-        .setValues([headers]);
+    .hidden {
+      display: none !important;
     }
 
-    sheet.setFrozenRows(1);
-  });
-}
-
-
-function getSpreadsheet_() {
-  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-
-  if (
-    activeSpreadsheet &&
-    activeSpreadsheet.getName() === APP_CONFIG.spreadsheetName
-  ) {
-    return activeSpreadsheet;
-  }
-
-  const files = DriveApp.getFilesByName(APP_CONFIG.spreadsheetName);
-
-  if (!files.hasNext()) {
-    throw new Error(
-      'Spreadsheet not found: ' +
-      APP_CONFIG.spreadsheetName
-    );
-  }
-
-  const file = files.next();
-
-  return SpreadsheetApp.openById(file.getId());
-}
-
-
-function getSheet_(sheetName) {
-  const sheet = getSpreadsheet_().getSheetByName(sheetName);
-
-  if (!sheet) {
-    throw new Error('Sheet not found: ' + sheetName);
-  }
-
-  return sheet;
-}
-
-
-function getSheetData_(sheetName) {
-  const sheet = getSheet_(sheetName);
-  const values = sheet.getDataRange().getValues();
-
-  if (values.length <= 1) {
-    return [];
-  }
-
-  const headers = values[0].map(cleanValue_);
-
-  return values.slice(1).map((row, index) => {
-    const object = {
-      _rowNumber: index + 2
-    };
-
-    headers.forEach((header, columnIndex) => {
-      object[header] = row[columnIndex];
-    });
-
-    return object;
-  });
-}
-
-
-function appendRows_(sheetName, rows) {
-  if (!rows || rows.length === 0) {
-    return;
-  }
-
-  const sheet = getSheet_(sheetName);
-  const headers = APP_CONFIG.headers[sheetName];
-
-  const values = rows.map(row => {
-    return headers.map(header => {
-      return row[header] !== undefined
-        ? row[header]
-        : '';
-    });
-  });
-
-  sheet
-    .getRange(
-      sheet.getLastRow() + 1,
-      1,
-      values.length,
-      headers.length
-    )
-    .setValues(values);
-}
-
-
-function updateSheetRow_(sheetName, rowNumber, rowObject) {
-  const sheet = getSheet_(sheetName);
-  const headers = APP_CONFIG.headers[sheetName];
-
-  const values = headers.map(header => {
-    return rowObject[header] !== undefined
-      ? rowObject[header]
-      : '';
-  });
-
-  sheet
-    .getRange(rowNumber, 1, 1, headers.length)
-    .setValues([values]);
-}
-
-
-/* =====================================================
-   BASIC DROPDOWNS
-===================================================== */
-
-function getLevels_() {
-  const students = getSheetData_('Student_Master');
-
-  const levels = uniqueSorted_(
-    students
-      .map(student => extractLevel_(student.Class))
-      .filter(Boolean)
-  );
-
-  return {
-    success: true,
-    levels: levels
-  };
-}
-
-
-function getClasses_(payload) {
-  const level = cleanValue_(payload.level);
-
-  if (!level) {
-    throw new Error('Missing level.');
-  }
-
-  const students = getSheetData_('Student_Master');
-
-  const classes = uniqueSorted_(
-    students
-      .map(student => cleanValue_(student.Class))
-      .filter(className => {
-        return extractLevel_(className) === level;
-      })
-  );
-
-  return {
-    success: true,
-    classes: classes
-  };
-}
-
-
-function getGroupsByClass_(payload) {
-  const className = cleanValue_(payload.className);
-
-  if (!className) {
-    throw new Error('Missing className.');
-  }
-
-  const groups = uniqueSorted_(
-    getSheetData_('Student_Master')
-      .filter(student => {
-        return cleanValue_(student.Class) === className;
-      })
-      .map(student => cleanValue_(student.Group))
-      .filter(Boolean)
-  );
-
-  return {
-    success: true,
-    groups: groups,
-    groupNames: groups
-  };
-}
-
-
-/* =====================================================
-   ADMIN CSV UPLOAD
-===================================================== */
-
-function uploadStudentCsv_(payload) {
-  const csvText = String(payload.csvText || '');
-  const uploadedBy = cleanValue_(payload.uploadedBy);
-  const replaceExisting = Boolean(payload.replaceExisting);
-
-  if (!csvText) {
-    throw new Error('CSV content is empty.');
-  }
-
-  if (!uploadedBy) {
-    throw new Error('Uploaded By is required.');
-  }
-
-  const parsedRows = Utilities.parseCsv(csvText);
-
-  if (!parsedRows || parsedRows.length === 0) {
-    throw new Error('CSV contains no rows.');
-  }
-
-  const headerRowIndex = findStudentHeaderRow_(parsedRows);
-
-  if (headerRowIndex === -1) {
-    throw new Error(
-      'Could not find the CSV header row containing No, Name, ID, Class, Gender and DOB.'
-    );
-  }
-
-  const rawRows = parsedRows
-    .slice(headerRowIndex + 1)
-    .filter(row => {
-      return row.slice(0, 6).some(value => cleanValue_(value));
-    });
-
-  const students = rawRows.map(row => {
-    return {
-      No: row[0],
-      Name: cleanValue_(row[1]),
-      ID: cleanValue_(row[2]),
-      Class: cleanValue_(row[3]),
-      Gender: normaliseGenderForStorage_(row[4]),
-      DOB: parseCsvDate_(row[5]),
-      Group: ''
-    };
-  }).filter(student => {
-    return (
-      student.Name &&
-      student.ID &&
-      student.Class
-    );
-  });
-
-  if (students.length === 0) {
-    throw new Error('No valid pupils found in the CSV.');
-  }
-
-  const classNames = uniqueSorted_(
-    students.map(student => student.Class)
-  );
-
-  const existingStudents = getSheetData_('Student_Master');
-  const existingClasses = new Set(
-    existingStudents.map(student => cleanValue_(student.Class))
-  );
-
-  const duplicateClasses = classNames.filter(className => {
-    return existingClasses.has(className);
-  });
-
-  if (duplicateClasses.length > 0 && !replaceExisting) {
-    return {
-      success: false,
-      requiresConfirmation: true,
-      existingClasses: duplicateClasses,
-      error:
-        'Some classes already exist. Confirm replacement before uploading.'
-    };
-  }
-
-  classNames.forEach(className => {
-    const classStudents = students.filter(student => {
-      return student.Class === className;
-    });
-
-    assignFiveGroups_(classStudents, className);
-  });
-
-  const sheet = getSheet_('Student_Master');
-  const headers = APP_CONFIG.headers.Student_Master;
-
-  let keptRows = existingStudents;
-
-  if (replaceExisting) {
-    const uploadedClassSet = new Set(classNames);
-
-    keptRows = existingStudents.filter(student => {
-      return !uploadedClassSet.has(cleanValue_(student.Class));
-    });
-  }
-
-  const finalRows = keptRows.concat(students);
-
-  sheet.clearContents();
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-
-  if (finalRows.length > 0) {
-    const values = finalRows.map(student => {
-      return headers.map(header => {
-        return student[header] !== undefined
-          ? student[header]
-          : '';
-      });
-    });
-
-    sheet
-      .getRange(2, 1, values.length, headers.length)
-      .setValues(values);
-  }
-
-  sheet.setFrozenRows(1);
-
-  classNames.forEach(className => {
-    appendRows_('Upload_Log', [{
-      Timestamp: new Date(),
-      Class: className,
-      Action: existingClasses.has(className)
-        ? 'Replace'
-        : 'Append',
-      'Rows Uploaded': students.filter(student => {
-        return student.Class === className;
-      }).length,
-      'Uploaded By': uploadedBy,
-      Remarks: ''
-    }]);
-  });
-
-CacheService
-  .getScriptCache()
-  .remove('stationSetupDataV2');
-
-  return {
-    success: true,
-    rowsUploaded: students.length,
-    classes: classNames,
-    message: 'Student list uploaded successfully.'
-  };
-}
-
-
-function findStudentHeaderRow_(rows) {
-  for (let index = 0; index < rows.length; index++) {
-    const firstSix = rows[index]
-      .slice(0, 6)
-      .map(value => cleanValue_(value).toLowerCase());
-
-    const expected = [
-      'no',
-      'name',
-      'id',
-      'class',
-      'gender',
-      'dob'
-    ];
-
-    const matches = expected.every((header, headerIndex) => {
-      return firstSix[headerIndex] === header;
-    });
-
-    if (matches) {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
-
-function assignFiveGroups_(students, className) {
-  const females = students
-    .filter(student => normaliseGenderCode_(student.Gender) === 'F')
-    .sort(sortByRegisterNo_);
-
-  const males = students
-    .filter(student => normaliseGenderCode_(student.Gender) === 'M')
-    .sort(sortByRegisterNo_);
-
-  const femaleGroupCount =
-    females.length === 0
-      ? 0
-      : Math.min(3, females.length);
-
-  const maleGroupCount =
-    males.length === 0
-      ? 0
-      : Math.min(2, males.length);
-
-  assignBalancedGroups_(
-    females,
-    femaleGroupCount,
-    className,
-    'FG'
-  );
-
-  assignBalancedGroups_(
-    males,
-    maleGroupCount,
-    className,
-    'MG'
-  );
-
-  const assignedCount =
-    femaleGroupCount + maleGroupCount;
-
-  if (assignedCount < 5) {
-    const remainingStudents = students
-      .filter(student => !student.Group)
-      .sort(sortByRegisterNo_);
-
-    remainingStudents.forEach((student, index) => {
-      student.Group =
-        className + '.G' + ((index % 5) + 1);
-    });
-  }
-}
-
-
-function assignBalancedGroups_(
-  students,
-  groupCount,
-  className,
-  prefix
-) {
-  if (groupCount <= 0) {
-    return;
-  }
-
-  const total = students.length;
-  const baseSize = Math.floor(total / groupCount);
-  const remainder = total % groupCount;
-
-  let startIndex = 0;
-
-  for (
-    let groupIndex = 0;
-    groupIndex < groupCount;
-    groupIndex++
-  ) {
-    const groupSize =
-      baseSize + (groupIndex < remainder ? 1 : 0);
-
-    const groupName =
-      className + '.' + prefix + (groupIndex + 1);
-
-    for (
-      let offset = 0;
-      offset < groupSize;
-      offset++
-    ) {
-      students[startIndex + offset].Group = groupName;
+    .page {
+      width: min(100%, 760px);
+      margin: auto;
+      padding: 9px;
     }
 
-    startIndex += groupSize;
-  }
-}
-
-
-/* =====================================================
-   STATION TESTER
-===================================================== */
-
-function getStationTesterData_(payload) {
-  const className = cleanValue_(payload.className);
-  const groupName = cleanValue_(payload.groupName);
-  const station = cleanValue_(payload.station);
-  const testDate = payload.testDate;
-
-  if (!className) {
-    throw new Error('Missing className.');
-  }
-
-  if (!groupName) {
-    throw new Error('Missing groupName.');
-  }
-
-  if (!station) {
-    throw new Error('Missing station.');
-  }
-
-  if (!testDate) {
-    throw new Error('Missing testDate.');
-  }
-
-  const students = getSheetData_('Student_Master')
-    .filter(student => {
-      return (
-        cleanValue_(student.Class) === className &&
-        cleanValue_(student.Group) === groupName
+    .app-header {
+      margin-bottom: 11px;
+      padding: 17px;
+      border-radius: 19px;
+      background: linear-gradient(
+        135deg,
+        var(--navy),
+        var(--navy-dark)
       );
-    })
-    .sort(sortByRegisterNo_);
-
-  const existingResults = getSheetData_('Station_Results')
-    .filter(row => {
-      return (
-        cleanValue_(row.Class) === className &&
-        cleanValue_(row.Group) === groupName &&
-        normaliseTextKey_(row.Station) ===
-          normaliseTextKey_(station) &&
-        datesMatch_(row['Test Date'], testDate)
-      );
-    });
-
-  const existingByStudentId = new Map();
-
-  existingResults.forEach(result => {
-    existingByStudentId.set(
-      String(result.ID).trim(),
-      result
-    );
-  });
-
-  const outputStudents = students.map(student => {
-    const existing = existingByStudentId.get(
-      String(student.ID).trim()
-    );
-
-    const existingStatus = existing
-      ? cleanValue_(existing.Status)
-      : '';
-
-    const isAbsent =
-      existingStatus.toLowerCase() === 'absent';
-
-    return {
-      No: student.No,
-      ID: student.ID,
-      Name: student.Name,
-      Class: student.Class,
-      Group: student.Group,
-      Gender: student.Gender,
-      DOB: formatDateForFrontend_(student.DOB),
-
-      AgeUsed: calculateAgeUsed_(
-        student.DOB,
-        testDate
-      ),
-
-      ExistingScore:
-        existing && !isAbsent
-          ? existing.Score
-          : '',
-
-      ExistingGrade:
-        existing && !isAbsent
-          ? existing.Grade
-          : '',
-
-      ExistingStatus:
-        existingStatus,
-
-      ExistingAbsent:
-        isAbsent,
-
-      HasExistingResult:
-        Boolean(existing)
-    };
-  });
-
-  return {
-    success: true,
-    className: className,
-    groupName: groupName,
-    station: station,
-    testDate: testDate,
-    students: outputStudents
-  
-  }
-
-function getStationRubric_(payload) {
-  const station = cleanValue_(payload.station);
-
-  if (!station) {
-    throw new Error('Missing station.');
-  }
-
-  const rubric = getSheetData_('NAPFA_Rubric')
-    .filter(row => {
-      return normaliseTextKey_(row.Station) ===
-        normaliseTextKey_(station);
-    })
-    .map(row => ({
-      Station: row.Station,
-      Gender: row.Gender,
-      Age: Number(row.Age),
-      Grade: cleanValue_(row.Grade).toUpperCase(),
-      Min: row.Min,
-      Max: row.Max,
-      Unit: row.Unit
-    }));
-
-  return {
-    success: true,
-    station: station,
-    rubric: rubric
-  };
-
-
-function getExistingStationResults_(payload) {
-  const className = cleanValue_(payload.className);
-  const groupName = cleanValue_(payload.groupName);
-  const station = cleanValue_(payload.station);
-  const testDate = payload.testDate;
-
-  if (!className) throw new Error('Missing className.');
-  if (!groupName) throw new Error('Missing groupName.');
-  if (!station) throw new Error('Missing station.');
-  if (!testDate) throw new Error('Missing testDate.');
-
-  const results = getSheetData_('Station_Results')
-    .filter(row => {
-      return (
-        cleanValue_(row.Class) === className &&
-        cleanValue_(row.Group) === groupName &&
-        normaliseTextKey_(row.Station) ===
-          normaliseTextKey_(station) &&
-        datesMatch_(row['Test Date'], testDate)
-      );
-    })
-    .sort(sortByRegisterNo_);
-
-  return {
-    success: true,
-    results: results
-  };
-}
-
-
-function saveStationResultsBatch_(payload) {
-  setupSheets_();
-
-  const sessionId = cleanValue_(payload.sessionId);
-  const testDate = payload.testDate;
-  const className = cleanValue_(payload.className);
-  const groupName = cleanValue_(payload.groupName);
-  const station = cleanValue_(payload.station);
-  const tester = cleanValue_(payload.tester);
-
-  const results = Array.isArray(payload.results)
-    ? payload.results
-    : [];
-
-  if (!sessionId) {
-    throw new Error('Missing sessionId.');
-  }
-
-  if (!testDate) {
-    throw new Error('Missing testDate.');
-  }
-
-  if (!className) {
-    throw new Error('Missing className.');
-  }
-
-  if (!groupName) {
-    throw new Error('Missing groupName.');
-  }
-
-  if (!station) {
-    throw new Error('Missing station.');
-  }
-
-  if (!tester) {
-    throw new Error('Tester name is required.');
-  }
-
-  if (results.length === 0) {
-    throw new Error('No station results supplied.');
-  }
-
-  const allowedStations = [
-    'Sit-ups',
-    'Standing Broad Jump',
-    'Sit and Reach',
-    'Inclined Pull-up',
-    'Shuttle Run'
-  ];
-
-  if (!allowedStations.includes(station)) {
-    throw new Error('Invalid station: ' + station);
-  }
-
-  const studentsById = new Map();
-
-  getSheetData_('Student_Master').forEach(student => {
-    studentsById.set(
-      String(student.ID).trim(),
-      student
-    );
-  });
-
-  const preparedRows = [];
-
-  results.forEach(item => {
-    const studentId = String(item.ID || '').trim();
-    const student = studentsById.get(studentId);
-
-    if (!student) {
-      throw new Error(
-        'Student not found in Student_Master: ' +
-        studentId
-      );
+      color: white;
+      box-shadow: var(--shadow);
     }
 
-    if (cleanValue_(student.Class) !== className) {
-      throw new Error(
-        student.Name +
-        ' does not belong to ' +
-        className + '.'
-      );
+    .app-header h1 {
+      margin: 0;
+      font-size: 22px;
     }
 
-    if (cleanValue_(student.Group) !== groupName) {
-      throw new Error(
-        student.Name +
-        ' does not belong to ' +
-        groupName + '.'
-      );
+    .app-header p {
+      margin: 7px 0 0;
+      font-size: 13px;
+      opacity: 0.9;
     }
 
-    const isAbsent = Boolean(item.absent);
-
-    const ageUsed = calculateAgeUsed_(
-      student.DOB,
-      testDate
-    );
-
-    if (isAbsent) {
-      preparedRows.push({
-        'Session ID': sessionId,
-        'Test Date': normaliseDateForStorage_(testDate),
-        'Class': className,
-        'Group': groupName,
-        'No': student.No,
-        'ID': student.ID,
-        'Name': student.Name,
-        'Gender': normaliseGenderForStorage_(student.Gender),
-        'DOB': normaliseDateForStorage_(student.DOB),
-        'Age Used': ageUsed,
-        'Station': station,
-        'Score': '',
-        'Grade': '',
-        'Status': 'Absent',
-        'Tester': tester,
-        'Remarks': ''
-      });
-
-      return;
+    .progress {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 11px;
     }
 
-    const rawScore = item.score;
-
-    if (
-      rawScore === '' ||
-      rawScore === null ||
-      rawScore === undefined
-    ) {
-      throw new Error(
-        'Missing score for ' +
-        student.Name + '.'
-      );
+    .progress-item {
+      min-height: 43px;
+      padding: 7px;
+      border: 0;
+      border-radius: 11px;
+      background: var(--grey-100);
+      color: var(--grey-500);
+      font-size: 11px;
+      font-weight: 700;
     }
 
-    const score = Number(rawScore);
-
-    if (Number.isNaN(score)) {
-      throw new Error(
-        'Invalid score for ' +
-        student.Name + '.'
-      );
+    .progress-item.active {
+      background: var(--navy);
+      color: white;
     }
 
-    validateStationScore_(
-      station,
-      score,
-      student.Name
-    );
+    .progress-item.done {
+      background: var(--green-light);
+      color: var(--green);
+    }
 
-    const grade = calculateStationGrade_(
-      station,
-      student.Gender,
-      ageUsed,
-      score
-    );
+    .panel {
+      padding: 15px;
+      border-radius: 19px;
+      background: white;
+      box-shadow: var(--shadow);
+    }
 
-    preparedRows.push({
-      'Session ID': sessionId,
-      'Test Date': normaliseDateForStorage_(testDate),
-      'Class': className,
-      'Group': groupName,
-      'No': student.No,
-      'ID': student.ID,
-      'Name': student.Name,
-      'Gender': normaliseGenderForStorage_(student.Gender),
-      'DOB': normaliseDateForStorage_(student.DOB),
-      'Age Used': ageUsed,
-      'Station': station,
-      'Score': score,
-      'Grade': grade,
-      'Status': 'Completed',
-      'Tester': tester,
-      'Remarks': ''
-    });
-  });
+    .panel h2 {
+      margin: 0 0 13px;
+      color: var(--navy);
+      font-size: 20px;
+    }
 
-  const saveResult = upsertStationResultsBatch_(
-    preparedRows,
-    tester
-  );
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 11px;
+    }
 
-  return {
-    success: true,
-    message: 'Station results saved.',
-    created: saveResult.created,
-    updated: saveResult.updated,
-    totalSaved: preparedRows.length,
+    .field label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 13px;
+      font-weight: 700;
+    }
 
-    results: preparedRows.map(row => ({
-      ID: row.ID,
-      Name: row.Name,
-      Score: row.Score,
-      Grade: row.Grade,
-      Status: row.Status,
-      Absent: row.Status === 'Absent'
-    }))
-  };
-}
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 11px;
+      border: 1px solid var(--grey-200);
+      border-radius: 11px;
+      background: white;
+      font-size: 16px;
+    }
 
+    .information,
+    .warning {
+      margin: 12px 0;
+      padding: 11px;
+      border-radius: 11px;
+      line-height: 1.45;
+      font-size: 13px;
+    }
 
-function upsertStationResultsBatch_(newRows, editedBy) {
-  const sheet = getSheet_('Station_Results');
-  const headers = APP_CONFIG.headers.Station_Results;
+    .information {
+      border-left: 5px solid var(--navy);
+      background: var(--blue-light);
+    }
 
-  const currentData = sheet.getDataRange().getValues();
+    .warning {
+      border-left: 5px solid #df991c;
+      background: var(--amber-light);
+    }
 
-  const existingRows = currentData.length > 1
-    ? currentData.slice(1)
-    : [];
+    .message {
+      min-height: 20px;
+      margin: 11px 0;
+      font-size: 13px;
+      font-weight: 700;
+    }
 
-  const existingMap = new Map();
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
 
-  existingRows.forEach((row, index) => {
-    const rowObject = {};
+    .btn {
+      min-height: 45px;
+      padding: 10px 15px;
+      border: 0;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
 
-    headers.forEach((header, columnIndex) => {
-      rowObject[header] = row[columnIndex];
-    });
+    .btn-primary {
+      background: var(--navy);
+      color: white;
+    }
 
-    existingMap.set(
-      stationResultKey_(rowObject),
-      {
-        index: index,
-        rowObject: rowObject
+    .btn-secondary {
+      background: var(--grey-100);
+      color: var(--navy);
+    }
+
+    .btn-danger {
+      background: var(--red-light);
+      color: var(--red);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .tester-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      margin: -15px -15px 13px;
+      padding: 12px 15px;
+      border-radius: 19px 19px 14px 14px;
+      background: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 5px 15px rgba(20, 39, 73, 0.11);
+      backdrop-filter: blur(8px);
+    }
+
+    .tester-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    .tester-subtitle {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--grey-500);
+    }
+
+    .progress-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 9px;
+    }
+
+    .progress-box {
+      padding: 7px;
+      border-radius: 10px;
+      background: var(--grey-50);
+      text-align: center;
+      font-size: 10px;
+    }
+
+    .progress-number {
+      display: block;
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .student-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .student-row {
+      padding: 11px;
+      border: 2px solid var(--grey-200);
+      border-radius: 15px;
+      background: white;
+      transition:
+        border-color 0.15s,
+        background 0.15s;
+    }
+
+    .student-row.complete {
+      border-color: var(--green);
+      background: var(--green-light);
+    }
+
+    .student-row.edited {
+      border-color: #d89516;
+      background: var(--amber-light);
+    }
+
+    .student-row.absent {
+      border-color: var(--grey-400);
+      background: var(--grey-100);
+    }
+
+    .student-row.failed {
+      border-color: var(--red);
+      background: var(--red-light);
+    }
+
+    .student-main {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) 108px 42px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .register-number {
+      font-size: 25px;
+      line-height: 1;
+      font-weight: 900;
+      text-align: center;
+      color: var(--navy);
+    }
+
+    .student-name {
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .score-wrap {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 3px;
+    }
+
+    .score-input {
+      width: 100%;
+      min-height: 45px;
+      padding: 7px 8px;
+      border: 2px solid var(--grey-200);
+      border-radius: 11px;
+      background: white;
+      font-size: 20px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .score-input:focus {
+      outline: none;
+      border-color: var(--navy);
+    }
+
+    .score-input:disabled {
+      background: var(--grey-200);
+      color: var(--grey-500);
+    }
+
+    .unit-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--grey-500);
+    }
+
+    .grade-badge {
+      min-width: 39px;
+      padding: 8px 5px;
+      border-radius: 10px;
+      background: var(--grey-100);
+      text-align: center;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .grade-a,
+    .grade-b,
+    .grade-c {
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    .grade-d,
+    .grade-e {
+      background: var(--amber-light);
+      color: var(--amber);
+    }
+
+    .grade-f {
+      background: var(--red-light);
+      color: var(--red);
+    }
+
+    .student-lower {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding-top: 7px;
+      border-top: 1px solid var(--grey-200);
+    }
+
+    .row-status {
+      color: var(--grey-500);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .absence-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border: 1px solid var(--grey-200);
+      border-radius: 9px;
+      background: white;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .absence-control input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
+    .student-row.absent .absence-control {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .save-bar {
+      position: sticky;
+      bottom: 0;
+      z-index: 90;
+      margin: 14px -15px -15px;
+      padding: 10px 15px;
+      border-radius: 14px 14px 19px 19px;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 -5px 16px rgba(20, 39, 73, 0.10);
+    }
+
+    .save-bar-message {
+      margin-bottom: 7px;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .save-bar .btn {
+      width: 100%;
+    }
+
+    .review-table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--grey-200);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 580px;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    th,
+    td {
+      padding: 9px;
+      border-bottom: 1px solid var(--grey-200);
+      text-align: left;
+      font-size: 12px;
+    }
+
+    th {
+      background: var(--grey-100);
+      color: var(--navy);
+      white-space: nowrap;
+    }
+
+    .success-box {
+      margin: 12px 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--green-light);
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 28, 48, 0.56);
+    }
+
+    .loading-card {
+      width: min(280px, 100%);
+      padding: 22px;
+      border-radius: 19px;
+      background: white;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+
+    .spinner {
+      width: 41px;
+      height: 41px;
+      margin: 0 auto 12px;
+      border: 5px solid var(--grey-200);
+      border-top-color: var(--navy);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
       }
-    );
-  });
+    }
 
-  let created = 0;
-  let updated = 0;
-
-  const editLogRows = [];
-
-  newRows.forEach(newRow => {
-    const key = stationResultKey_(newRow);
-    const existing = existingMap.get(key);
-
-    if (existing) {
-      const oldRow = existing.rowObject;
-
-      if (
-        String(oldRow.Score) !== String(newRow.Score)
-      ) {
-        editLogRows.push({
-          'Timestamp': new Date(),
-          'Session ID': newRow['Session ID'],
-          'ID': newRow.ID,
-          'Name': newRow.Name,
-          'Module': '5-Station NAPFA',
-          'Field Changed': 'Score',
-          'Old Value': oldRow.Score,
-          'New Value': newRow.Score,
-          'Edited By': editedBy
-        });
+    @media (max-width: 650px) {
+      .form-grid {
+        grid-template-columns: 1fr;
       }
 
-      if (
-        String(oldRow.Status) !== String(newRow.Status)
-      ) {
-        editLogRows.push({
-          'Timestamp': new Date(),
-          'Session ID': newRow['Session ID'],
-          'ID': newRow.ID,
-          'Name': newRow.Name,
-          'Module': '5-Station NAPFA',
-          'Field Changed': 'Status',
-          'Old Value': oldRow.Status,
-          'New Value': newRow.Status,
-          'Edited By': editedBy
-        });
+      .student-main {
+        grid-template-columns:
+          38px
+          minmax(0, 1fr)
+          88px
+          38px;
+        gap: 6px;
       }
 
-      existingRows[existing.index] =
-        headers.map(header => {
-          return newRow[header] !== undefined
-            ? newRow[header]
-            : '';
-        });
-
-      updated++;
-
-    } else {
-      existingRows.push(
-        headers.map(header => {
-          return newRow[header] !== undefined
-            ? newRow[header]
-            : '';
-        })
-      );
-
-      created++;
-    }
-  });
-
-  sheet.clearContents();
-
-  sheet
-    .getRange(1, 1, 1, headers.length)
-    .setValues([headers]);
-
-  if (existingRows.length > 0) {
-    sheet
-      .getRange(
-        2,
-        1,
-        existingRows.length,
-        headers.length
-      )
-      .setValues(existingRows);
-  }
-
-  sheet.setFrozenRows(1);
-
-  if (editLogRows.length > 0) {
-    appendRows_(
-      'Edit_Log',
-      editLogRows
-    );
-  }
-
-  return {
-    created: created,
-    updated: updated
-  };
-}
-
-
-function stationResultKey_(row) {
-  return [
-    normaliseDateKey_(row['Test Date']),
-    String(row.ID || '').trim(),
-    normaliseTextKey_(row.Station)
-  ].join('|');
-}
-
-
-function calculateStationGrade_(
-  station,
-  gender,
-  age,
-  score
-) {
-  const genderCode = normaliseGenderCode_(gender);
-
-  const rubricRows = getSheetData_('NAPFA_Rubric')
-    .filter(row => {
-      return (
-        normaliseTextKey_(row.Station) ===
-          normaliseTextKey_(station) &&
-        normaliseGenderCode_(row.Gender) ===
-          genderCode &&
-        Number(row.Age) === Number(age)
-      );
-    });
-
-  const gradeOrder = ['A', 'B', 'C', 'D', 'E', 'F'];
-
-  for (let index = 0; index < gradeOrder.length; index++) {
-    const grade = gradeOrder[index];
-
-    const row = rubricRows.find(item => {
-      return cleanValue_(item.Grade).toUpperCase() === grade;
-    });
-
-    if (!row) {
-      continue;
-    }
-
-    const hasMin =
-      row.Min !== '' &&
-      row.Min !== null &&
-      row.Min !== undefined;
-
-    const hasMax =
-      row.Max !== '' &&
-      row.Max !== null &&
-      row.Max !== undefined;
-
-    const min = Number(row.Min);
-    const max = Number(row.Max);
-
-    if (
-      hasMin &&
-      hasMax &&
-      score >= min &&
-      score <= max
-    ) {
-      return grade;
-    }
-
-    if (
-      hasMin &&
-      !hasMax &&
-      score >= min
-    ) {
-      return grade;
-    }
-
-    if (
-      !hasMin &&
-      hasMax &&
-      score <= max
-    ) {
-      return grade;
-    }
-  }
-
-  return '';
-}
-
-
-function validateStationScore_(station, score, studentName) {
-  const ranges = {
-    'Sit-ups': {
-      min: 0,
-      max: 100,
-      whole: true
-    },
-
-    'Standing Broad Jump': {
-      min: 0,
-      max: 400,
-      whole: true
-    },
-
-    'Sit and Reach': {
-      min: -50,
-      max: 100,
-      whole: true
-    },
-
-    'Inclined Pull-up': {
-      min: 0,
-      max: 100,
-      whole: true
-    },
-
-    'Shuttle Run': {
-      min: 5,
-      max: 60,
-      whole: false
-    }
-  };
-
-  const range = ranges[station];
-
-  if (!range) {
-    throw new Error(
-      'Unknown station: ' + station
-    );
-  }
-
-  if (
-    score < range.min ||
-    score > range.max
-  ) {
-    throw new Error(
-      'Score for ' + studentName +
-      ' must be between ' +
-      range.min + ' and ' + range.max + '.'
-    );
-  }
-
-  if (
-    range.whole &&
-    !Number.isInteger(score)
-  ) {
-    throw new Error(
-      station +
-      ' requires a whole-number score for ' +
-      studentName + '.'
-    );
-  }
-}
-
-
-/* =====================================================
-   RUN TIMING
-===================================================== */
-
-function getRunStudentsByClass_(payload) {
-  const className = cleanValue_(payload.className);
-
-  if (!className) {
-    throw new Error('Missing className.');
-  }
-
-  const students = getSheetData_('Student_Master')
-    .filter(student => {
-      return cleanValue_(student.Class) === className;
-    })
-    .sort(sortByRegisterNo_);
-
-  return {
-    success: true,
-    students: students.map(student => ({
-      No: student.No,
-      ID: student.ID,
-      Name: student.Name,
-      Class: student.Class,
-      Gender: student.Gender,
-      DOB: formatDateForFrontend_(student.DOB),
-      Group: student.Group
-    }))
-  };
-}
-
-
-function saveRunSession_(payload) {
-  const sessionId = cleanValue_(payload.sessionId);
-  const testDate = payload.testDate;
-  const className = cleanValue_(payload.className);
-  const mode = cleanValue_(payload.mode);
-  const students = Array.isArray(payload.students)
-    ? payload.students
-    : [];
-
-  if (!sessionId) throw new Error('Missing sessionId.');
-  if (!testDate) throw new Error('Missing testDate.');
-  if (!className) throw new Error('Missing className.');
-  if (students.length === 0) {
-    throw new Error('No students supplied.');
-  }
-
-  clearRunSessionBySessionId_(sessionId);
-
-  const rows = students.map(student => ({
-    'Session ID': sessionId,
-    'Test Date': normaliseDateForStorage_(testDate),
-    Mode: mode || '1.6km Run',
-    Class: className,
-    No: student.No,
-    ID: student.ID,
-    Name: student.Name,
-    Wave: student.Wave,
-    'Run Status': student.RunStatus || student.Wave
-  }));
-
-  appendRows_('Run_Session', rows);
-
-  return {
-    success: true,
-    sessionId: sessionId,
-    rowsSaved: rows.length
-  };
-}
-
-
-function clearRunSessionBySessionId_(sessionId) {
-  const sheet = getSheet_('Run_Session');
-  const data = sheet.getDataRange().getValues();
-
-  if (data.length <= 1) {
-    return 0;
-  }
-
-  const headers = data[0].map(cleanValue_);
-  const sessionIndex = headers.indexOf('Session ID');
-
-  const keptRows = [data[0]];
-  let removed = 0;
-
-  for (
-    let rowIndex = 1;
-    rowIndex < data.length;
-    rowIndex++
-  ) {
-    if (
-      String(data[rowIndex][sessionIndex]).trim() ===
-      String(sessionId).trim()
-    ) {
-      removed++;
-    } else {
-      keptRows.push(data[rowIndex]);
-    }
-  }
-
-  if (removed > 0) {
-    sheet.clearContents();
-
-    sheet
-      .getRange(
-        1,
-        1,
-        keptRows.length,
-        keptRows[0].length
-      )
-      .setValues(keptRows);
-
-    sheet.setFrozenRows(1);
-  }
-
-  return removed;
-}
-
-
-function saveRunFinish_(payload) {
-  const sessionId = cleanValue_(payload.sessionId);
-  const testDate = payload.testDate;
-  const className = cleanValue_(payload.className);
-  const wave = cleanValue_(payload.wave);
-  const student = payload.student || {};
-  const elapsedSeconds = Number(payload.elapsedSeconds);
-  const attemptNo = Number(payload.attemptNo || 1);
-  const remarks = cleanValue_(payload.remarks);
-
-  if (!sessionId) throw new Error('Missing sessionId.');
-  if (!student.ID) throw new Error('Missing student ID.');
-  if (Number.isNaN(elapsedSeconds)) {
-    throw new Error('Invalid elapsed time.');
-  }
-
-  const ageUsed = calculateAgeUsed_(
-    student.DOB,
-    testDate
-  );
-
-  const grade = calculateStationGrade_(
-    '1.6km Run',
-    student.Gender,
-    ageUsed,
-    elapsedSeconds
-  );
-
-  const row = {
-    'Session ID': sessionId,
-    'Test Date': normaliseDateForStorage_(testDate),
-    Class: className,
-    No: student.No,
-    ID: student.ID,
-    Name: student.Name,
-    Gender: normaliseGenderForStorage_(student.Gender),
-    DOB: normaliseDateForStorage_(student.DOB),
-    'Age Used': ageUsed,
-    Wave: wave,
-    'Attempt No': attemptNo,
-    Time: secondsToTimeText_(elapsedSeconds),
-    'Time Seconds': elapsedSeconds,
-    Grade: grade,
-    Status: 'Completed',
-    Remarks: remarks
-  };
-
-  upsertRunResult_(row);
-  updateRunSessionStatus_(sessionId, student.ID, 'Completed');
-
-  return {
-    success: true,
-    result: {
-      Time: row.Time,
-      TimeSeconds: elapsedSeconds,
-      Grade: grade,
-      Status: row.Status
-    }
-  };
-}
-
-
-function markRunStatus_(payload) {
-  const sessionId = cleanValue_(payload.sessionId);
-  const testDate = payload.testDate;
-  const className = cleanValue_(payload.className);
-  const wave = cleanValue_(payload.wave);
-  const student = payload.student || {};
-  const status = cleanValue_(payload.status);
-  const attemptNo = Number(payload.attemptNo || 1);
-  const remarks = cleanValue_(payload.remarks);
-
-  if (!sessionId) throw new Error('Missing sessionId.');
-  if (!student.ID) throw new Error('Missing student ID.');
-  if (!status) throw new Error('Missing status.');
-
-  const ageUsed = calculateAgeUsed_(
-    student.DOB,
-    testDate
-  );
-
-  const row = {
-    'Session ID': sessionId,
-    'Test Date': normaliseDateForStorage_(testDate),
-    Class: className,
-    No: student.No,
-    ID: student.ID,
-    Name: student.Name,
-    Gender: normaliseGenderForStorage_(student.Gender),
-    DOB: normaliseDateForStorage_(student.DOB),
-    'Age Used': ageUsed,
-    Wave: wave,
-    'Attempt No': attemptNo,
-    Time: '',
-    'Time Seconds': '',
-    Grade: '',
-    Status: status,
-    Remarks: remarks
-  };
-
-  upsertRunResult_(row);
-  updateRunSessionStatus_(sessionId, student.ID, status);
-
-  return {
-    success: true,
-    status: status
-  };
-}
-
-
-function upsertRunResult_(newRow) {
-  const rows = getSheetData_('Run_Results');
-
-  const existing = rows.find(row => {
-    return (
-      cleanValue_(row['Session ID']) ===
-        cleanValue_(newRow['Session ID']) &&
-      String(row.ID).trim() ===
-        String(newRow.ID).trim() &&
-      Number(row['Attempt No']) ===
-        Number(newRow['Attempt No'])
-    );
-  });
-
-  if (existing) {
-    updateSheetRow_(
-      'Run_Results',
-      existing._rowNumber,
-      newRow
-    );
-  } else {
-    appendRows_('Run_Results', [newRow]);
-  }
-}
-
-
-function saveNotRunningReasons_(payload) {
-  const sessionId = cleanValue_(payload.sessionId);
-  const testDate = payload.testDate;
-  const className = cleanValue_(payload.className);
-  const pupils = Array.isArray(payload.pupils)
-    ? payload.pupils
-    : [];
-
-  if (!sessionId) throw new Error('Missing sessionId.');
-  if (pupils.length === 0) {
-    throw new Error('No Not Running pupils supplied.');
-  }
-
-  const allowedStatuses = [
-    'Absent',
-    'Did Not Start',
-    'Medical',
-    'Injured',
-    'Retest Needed',
-    'Not Running'
-  ];
-
-  const rows = pupils.map(item => {
-    const student = item.student || {};
-    const status = cleanValue_(item.status);
-
-    if (!allowedStatuses.includes(status)) {
-      throw new Error(
-        'Invalid Not Running reason for ' +
-        (student.Name || student.ID)
-      );
-    }
-
-    return {
-      'Session ID': sessionId,
-      'Test Date': normaliseDateForStorage_(testDate),
-      Class: className,
-      No: student.No,
-      ID: student.ID,
-      Name: student.Name,
-      Gender: normaliseGenderForStorage_(student.Gender),
-      DOB: normaliseDateForStorage_(student.DOB),
-      'Age Used': calculateAgeUsed_(student.DOB, testDate),
-      Wave: 'Not Running',
-      'Attempt No': 1,
-      Time: '',
-      'Time Seconds': '',
-      Grade: '',
-      Status: status,
-      Remarks: cleanValue_(item.remarks)
-    };
-  });
-
-  rows.forEach(row => {
-    upsertRunResult_(row);
-    updateRunSessionStatus_(
-      sessionId,
-      row.ID,
-      row.Status
-    );
-  });
-
-  return {
-    success: true,
-    rowsSaved: rows.length
-  };
-}
-
-
-function getRunWaveSummary_(payload) {
-  const sessionId = cleanValue_(payload.sessionId);
-  const wave = cleanValue_(payload.wave);
-
-  if (!sessionId) throw new Error('Missing sessionId.');
-  if (!wave) throw new Error('Missing wave.');
-
-  const results = getSheetData_('Run_Results')
-    .filter(row => {
-      return (
-        cleanValue_(row['Session ID']) === sessionId &&
-        cleanValue_(row.Wave) === wave
-      );
-    })
-    .sort((a, b) => {
-      const aTime = Number(a['Time Seconds']);
-      const bTime = Number(b['Time Seconds']);
-
-      if (
-        !Number.isNaN(aTime) &&
-        !Number.isNaN(bTime)
-      ) {
-        return aTime - bTime;
+      .register-number {
+        font-size: 22px;
       }
 
-      return Number(a.No) - Number(b.No);
-    });
-
-  return {
-    success: true,
-    results: results.map(row => ({
-      No: row.No,
-      ID: row.ID,
-      Name: row.Name,
-      Time: row.Time,
-      TimeSeconds: row['Time Seconds'],
-      Grade: row.Grade,
-      Status: row.Status,
-      Remarks: row.Remarks,
-      Wave: row.Wave
-    }))
-  };
-}
-
-
-function deleteRunResult_(payload) {
-  const sessionId = cleanValue_(payload.sessionId);
-  const studentId = String(payload.studentId || '').trim();
-  const attemptNo = Number(payload.attemptNo || 1);
-
-  const sheet = getSheet_('Run_Results');
-  const data = sheet.getDataRange().getValues();
-
-  if (data.length <= 1) {
-    return {
-      success: true,
-      deletedRows: 0
-    };
-  }
-
-  const headers = data[0].map(cleanValue_);
-  const sessionIndex = headers.indexOf('Session ID');
-  const idIndex = headers.indexOf('ID');
-  const attemptIndex = headers.indexOf('Attempt No');
-
-  const keptRows = [data[0]];
-  let deletedRows = 0;
-
-  for (
-    let rowIndex = 1;
-    rowIndex < data.length;
-    rowIndex++
-  ) {
-    const matches =
-      cleanValue_(data[rowIndex][sessionIndex]) === sessionId &&
-      String(data[rowIndex][idIndex]).trim() === studentId &&
-      Number(data[rowIndex][attemptIndex]) === attemptNo;
-
-    if (matches) {
-      deletedRows++;
-    } else {
-      keptRows.push(data[rowIndex]);
-    }
-  }
-
-  if (deletedRows > 0) {
-    sheet.clearContents();
-
-    sheet
-      .getRange(
-        1,
-        1,
-        keptRows.length,
-        keptRows[0].length
-      )
-      .setValues(keptRows);
-
-    sheet.setFrozenRows(1);
-  }
-
-  updateRunSessionStatus_(sessionId, studentId, '');
-
-  return {
-    success: true,
-    deletedRows: deletedRows
-  };
-}
-
-
-function updateRunSessionStatus_(
-  sessionId,
-  studentId,
-  status
-) {
-  const sheet = getSheet_('Run_Session');
-  const data = sheet.getDataRange().getValues();
-
-  if (data.length <= 1) {
-    return;
-  }
-
-  const headers = data[0].map(cleanValue_);
-  const sessionIndex = headers.indexOf('Session ID');
-  const idIndex = headers.indexOf('ID');
-  const statusIndex = headers.indexOf('Run Status');
-
-  let changed = false;
-
-  for (
-    let rowIndex = 1;
-    rowIndex < data.length;
-    rowIndex++
-  ) {
-    if (
-      cleanValue_(data[rowIndex][sessionIndex]) ===
-        cleanValue_(sessionId) &&
-      String(data[rowIndex][idIndex]).trim() ===
-        String(studentId).trim()
-    ) {
-      data[rowIndex][statusIndex] = status;
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    sheet.getDataRange().setValues(data);
-  }
-}
-
-
-function completeRunSession_(payload) {
-  const sessionId = cleanValue_(payload.sessionId);
-
-  if (!sessionId) {
-    throw new Error('Missing sessionId.');
-  }
-
-  const sheet = getSheet_('Run_Session');
-  const data = sheet.getDataRange().getValues();
-
-  if (data.length <= 1) {
-    throw new Error('Run session not found.');
-  }
-
-  const headers = data[0].map(cleanValue_);
-  const sessionIndex = headers.indexOf('Session ID');
-  const statusIndex = headers.indexOf('Run Status');
-
-  let updatedRows = 0;
-
-  for (
-    let rowIndex = 1;
-    rowIndex < data.length;
-    rowIndex++
-  ) {
-    if (
-      cleanValue_(data[rowIndex][sessionIndex]) ===
-      sessionId
-    ) {
-      const currentStatus =
-        cleanValue_(data[rowIndex][statusIndex]);
-
-      if (
-        currentStatus === 'Wave 1' ||
-        currentStatus === 'Wave 2' ||
-        currentStatus === ''
-      ) {
-        data[rowIndex][statusIndex] =
-          'Session Completed';
+      .student-name {
+        font-size: 11px;
       }
 
-      updatedRows++;
-    }
-  }
-
-  if (updatedRows === 0) {
-    throw new Error('No matching session rows found.');
-  }
-
-  sheet.getDataRange().setValues(data);
-
-  return {
-    success: true,
-    sessionId: sessionId,
-    rowsUpdated: updatedRows
-  };
-}
-
-
-/* =====================================================
-   GENERAL HELPERS
-===================================================== */
-
-function cleanValue_(value) {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  return String(value).trim();
-}
-
-
-function normaliseTextKey_(value) {
-  return cleanValue_(value)
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
-}
-
-
-function normaliseGenderCode_(value) {
-  const text = cleanValue_(value).toUpperCase();
-
-  if (text === 'F' || text === 'FEMALE') {
-    return 'F';
-  }
-
-  if (text === 'M' || text === 'MALE') {
-    return 'M';
-  }
-
-  return text;
-}
-
-
-function normaliseGenderForStorage_(value) {
-  const code = normaliseGenderCode_(value);
-
-  if (code === 'F') {
-    return 'Female';
-  }
-
-  if (code === 'M') {
-    return 'Male';
-  }
-
-  return cleanValue_(value);
-}
-
-
-function extractLevel_(className) {
-  const match = cleanValue_(className).match(/^P\d+/i);
-
-  return match
-    ? match[0].toUpperCase()
-    : '';
-}
-
-
-function uniqueSorted_(values) {
-  return [...new Set(values)].sort((a, b) => {
-    return String(a).localeCompare(
-      String(b),
-      undefined,
-      {
-        numeric: true,
-        sensitivity: 'base'
+      .score-input {
+        min-height: 42px;
+        font-size: 18px;
       }
-    );
-  });
-}
 
+      .grade-badge {
+        min-width: 36px;
+        padding: 7px 4px;
+        font-size: 16px;
+      }
 
-function sortByRegisterNo_(a, b) {
-  return Number(a.No) - Number(b.No);
-}
-
-
-function calculateAgeUsed_(dobValue, testDateValue) {
-  const dob = parseDate_(dobValue);
-  const testDate = parseDate_(testDateValue);
-
-  if (!dob || !testDate) {
-    return '';
-  }
-
-  let age =
-    testDate.getFullYear() -
-    dob.getFullYear();
-
-  const birthdayPassed =
-    testDate.getMonth() > dob.getMonth() ||
-    (
-      testDate.getMonth() === dob.getMonth() &&
-      testDate.getDate() >= dob.getDate()
-    );
-
-  if (!birthdayPassed) {
-    age--;
-  }
-
-  return age;
-}
-
-
-function parseDate_(value) {
-  if (!value) {
-    return null;
-  }
-
-  if (
-    Object.prototype.toString.call(value) ===
-    '[object Date]' &&
-    !Number.isNaN(value.getTime())
-  ) {
-    return value;
-  }
-
-  const text = cleanValue_(value);
-
-  const yyyyMmDd =
-    text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-
-  if (yyyyMmDd) {
-    return new Date(
-      Number(yyyyMmDd[1]),
-      Number(yyyyMmDd[2]) - 1,
-      Number(yyyyMmDd[3])
-    );
-  }
-
-  const slashDate =
-    text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-
-  if (slashDate) {
-    const first = Number(slashDate[1]);
-    const second = Number(slashDate[2]);
-    const year = Number(slashDate[3]);
-
-    return new Date(
-      year,
-      second - 1,
-      first
-    );
-  }
-
-  const parsed = new Date(text);
-
-  return Number.isNaN(parsed.getTime())
-    ? null
-    : parsed;
-}
-
-
-function parseCsvDate_(value) {
-  const parsed = parseDate_(value);
-
-  return parsed || cleanValue_(value);
-}
-
-
-function normaliseDateForStorage_(value) {
-  const date = parseDate_(value);
-
-  return date || cleanValue_(value);
-}
-
-
-function formatDateForFrontend_(value) {
-  const date = parseDate_(value);
-
-  if (!date) {
-    return cleanValue_(value);
-  }
-
-  return Utilities.formatDate(
-    date,
-    Session.getScriptTimeZone(),
-    'yyyy-MM-dd'
-  );
-}
-
-
-function normaliseDateKey_(value) {
-  const date = parseDate_(value);
-
-  if (!date) {
-    return cleanValue_(value);
-  }
-
-  return Utilities.formatDate(
-    date,
-    Session.getScriptTimeZone(),
-    'yyyy-MM-dd'
-  );
-}
-
-
-function datesMatch_(dateA, dateB) {
-  return (
-    normaliseDateKey_(dateA) ===
-    normaliseDateKey_(dateB)
-  );
-}
-
-
-function secondsToTimeText_(totalSeconds) {
-  const safeSeconds =
-    Math.max(0, Math.round(Number(totalSeconds)));
-
-  const minutes =
-    Math.floor(safeSeconds / 60);
-
-  const seconds =
-    safeSeconds % 60;
-
-  return (
-    String(minutes).padStart(2, '0') +
-    ':' +
-    String(seconds).padStart(2, '0')
-  );
-}
-
-
-function jsonResponse_(object) {
-  return ContentService
-    .createTextOutput(JSON.stringify(object))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-function getStationSetupData_() {
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'stationSetupDataV2';
-
-  const cached = cache.get(cacheKey);
-
-  if (cached) {
-    return JSON.parse(cached);
-  }
-
-  const students = getSheetData_('Student_Master');
-
-  const levelSet = new Set();
-  const classesByLevelSets = {};
-  const groupsByClassSets = {};
-
-  students.forEach(student => {
-    const className = cleanValue_(student.Class);
-    const groupName = cleanValue_(student.Group);
-    const level = extractLevel_(className);
-
-    if (!className || !level) {
-      return;
+      .student-lower {
+        align-items: flex-end;
+      }
     }
 
-    levelSet.add(level);
+    @media (max-width: 390px) {
+      .student-main {
+        grid-template-columns:
+          34px
+          minmax(0, 1fr)
+          78px
+          35px;
+      }
 
-    if (!classesByLevelSets[level]) {
-      classesByLevelSets[level] = new Set();
+      .student-row {
+        padding: 9px 8px;
+      }
+
+      .student-name {
+        font-size: 10px;
+      }
+
+      .absence-control {
+        padding: 5px 6px;
+        font-size: 10px;
+      }
     }
+  </style>
+</head>
 
-    classesByLevelSets[level].add(className);
+<body>
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <strong id="loadingText">Loading...</strong>
+    </div>
+  </div>
 
-    if (!groupsByClassSets[className]) {
-      groupsByClassSets[className] = new Set();
-    }
+  <main class="page">
+    <header class="app-header">
+      <h1>BVPS NAPFA 5-Station Tester</h1>
+      <p>Fast phone entry with one pupil per row</p>
+    </header>
 
-    if (groupName) {
-      groupsByClassSets[className].add(groupName);
-    }
-  });
+    <nav class="progress">
+      <button id="progressSetup" class="progress-item active">
+        1. Setup
+      </button>
 
-  const levels = Array.from(levelSet).sort(naturalSort_);
+      <button id="progressScores" class="progress-item">
+        2. Scores
+      </button>
 
-  const classesByLevel = {};
+      <button id="progressReview" class="progress-item">
+        3. Review
+      </button>
+    </nav>
 
-  Object.keys(classesByLevelSets).forEach(level => {
-    classesByLevel[level] =
-      Array.from(classesByLevelSets[level]).sort(naturalSort_);
-  });
+    <section id="stepSetup" class="panel">
+      <h2>Tester Setup</h2>
 
-  const groupsByClass = {};
+      <div class="form-grid">
+        <div class="field">
+          <label for="testDate">Test date</label>
+          <input id="testDate" type="date">
+        </div>
 
-  Object.keys(groupsByClassSets).forEach(className => {
-    groupsByClass[className] =
-      Array.from(groupsByClassSets[className]).sort(naturalSort_);
-  });
+        <div class="field">
+          <label for="testerName">Tester name</label>
 
-  const result = {
-    success: true,
-    levels: levels,
-    classesByLevel: classesByLevel,
-    groupsByClass: groupsByClass
-  };
+          <input
+            id="testerName"
+            type="text"
+            placeholder="Enter tester name"
+            autocomplete="name"
+          >
+        </div>
 
-  cache.put(
-    cacheKey,
-    JSON.stringify(result),
-    21600
-  );
+        <div class="field">
+          <label for="stationSelect">Station</label>
 
-  return result;
-}
+          <select id="stationSelect">
+            <option value="">Select station</option>
+          </select>
+        </div>
 
+        <div class="field">
+          <label for="levelSelect">Level</label>
 
-function naturalSort_(a, b) {
-  return String(a).localeCompare(
-    String(b),
-    undefined,
-    {
-      numeric: true,
-      sensitivity: 'base'
-    }
-  );
-}
+          <select
+            id="levelSelect"
+            onchange="updateClassesFromMemory()"
+          >
+            <option value="">Select level</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="classSelect">Class</label>
+
+          <select
+            id="classSelect"
+            onchange="updateGroupsFromMemory()"
+          >
+            <option value="">Select class</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="groupSelect">Group</label>
+
+          <select id="groupSelect">
+            <option value="">Select group</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="information">
+        The selected station stays unchanged when testing the next group.
+      </div>
+
+      <div class="warning">
+        Existing results for the same date, pupil and station will be updated rather than duplicated.
+      </div>
+
+      <div id="setupMessage" class="message"></div>
+
+      <div class="action-row">
+        <button
+          class="btn btn-primary"
+          onclick="loadTesterGroup()"
+        >
+          Load Group
+        </button>
+      </div>
+    </section>
+
+    <section id="stepScores" class="panel hidden">
+      <div class="tester-header">
+        <div id="testerTitle" class="tester-title"></div>
+        <div id="testerSubtitle" class="tester-subtitle"></div>
+
+        <div class="progress-strip">
+          <div class="progress-box">
+            <span id="enteredCount" class="progress-number">0</span>
+            Entered
+          </div>
+
+          <div class="progress-box">
+            <span id="absentCount" class="progress-number">0</span>
+            Absent
+          </div>
+
+          <div class="progress-box">
+            <span id="missingCount" class="progress-number">0</span>
+            Missing
+          </div>
+        </div>
+      </div>
+
+      <div class="information">
+        Enter each score. Select <strong>Absent</strong> only when required. A confirmation will appear before the score field is locked.
+      </div>
+
+      <div id="studentList" class="student-list"></div>
+
+      <div class="save-bar">
+        <div id="saveBarMessage" class="save-bar-message">
+          No unsaved changes
+        </div>
+
+        <button
+          id="saveResultsButton"
+          class="btn btn-primary"
+          onclick="saveGroupResults()"
+        >
+          Save Group Results
+        </button>
+      </div>
+    </section>
+
+    <section id="stepReview" class="panel hidden">
+      <h2>Saved Results</h2>
+
+      <div id="reviewMessage" class="success-box"></div>
+
+      <div class="review-table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Name</th>
+              <th>Score</th>
+              <th>Grade</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+
+          <tbody id="reviewBody"></tbody>
+        </table>
+      </div>
+
+      <div class="action-row">
+        <button
+          class="btn btn-secondary"
+          onclick="returnToScores()"
+        >
+          Edit Scores
+        </button>
+
+        <button
+          class="btn btn-primary"
+          onclick="testNextGroup()"
+        >
+          Test Next Group
+        </button>
+
+        <button
+          class="btn btn-danger"
+          onclick="changeStation()"
+        >
+          Change Station
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script src="station-test.js"></script>
+</body>
+</html>
