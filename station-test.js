@@ -1,7 +1,14 @@
-const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec";
+const GOOGLE_APPS_SCRIPT_URL =
+  "PASTE_YOUR_WEB_APP_URL_HERE";
 
 const LOCAL_DRAFT_KEY =
-  "BVPS_NAPFA_STATION_DRAFT_V1";
+  "BVPS_NAPFA_STATION_DRAFT_V2";
+
+const TESTER_NAME_KEY =
+  "BVPS_NAPFA_TESTER_NAME";
+
+const STATION_KEY =
+  "BVPS_NAPFA_LAST_STATION";
 
 const STATIONS = [
   "Sit-ups",
@@ -11,14 +18,25 @@ const STATIONS = [
   "Shuttle Run"
 ];
 
-let students = [];
+let setupData = {
+  levels: [],
+  classesByLevel: {},
+  groupsByClass: {}
+};
+
+let rubricCache = {};
 let rubricRows = [];
 
+let students = [];
 let currentContext = null;
+
 let hasUnsavedChanges = false;
 let saveInProgress = false;
 
-window.addEventListener("load", initialisePage);
+window.addEventListener(
+  "load",
+  initialisePage
+);
 
 
 /* =====================================================
@@ -29,9 +47,9 @@ async function initialisePage() {
   setTodayDate();
   installCloseWarning();
   restoreTesterName();
-
-  await loadLevels();
   loadStations();
+
+  await loadStationSetupData();
 }
 
 
@@ -39,10 +57,14 @@ function setTodayDate() {
   const now = new Date();
 
   const year = now.getFullYear();
+
   const month =
-    String(now.getMonth() + 1).padStart(2, "0");
+    String(now.getMonth() + 1)
+      .padStart(2, "0");
+
   const day =
-    String(now.getDate()).padStart(2, "0");
+    String(now.getDate())
+      .padStart(2, "0");
 
   document.getElementById("testDate").value =
     `${year}-${month}-${day}`;
@@ -50,24 +72,31 @@ function setTodayDate() {
 
 
 function installCloseWarning() {
-  window.addEventListener("beforeunload", event => {
-    if (hasUnsavedChanges || saveInProgress) {
-      event.preventDefault();
-      event.returnValue = "";
+  window.addEventListener(
+    "beforeunload",
+    event => {
+      if (
+        hasUnsavedChanges ||
+        saveInProgress
+      ) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
     }
-  });
+  );
 }
 
 
 function restoreTesterName() {
   const saved =
     localStorage.getItem(
-      "BVPS_NAPFA_TESTER_NAME"
+      TESTER_NAME_KEY
     );
 
   if (saved) {
-    document.getElementById("testerName").value =
-      saved;
+    document.getElementById(
+      "testerName"
+    ).value = saved;
   }
 }
 
@@ -77,19 +106,21 @@ function restoreTesterName() {
 ===================================================== */
 
 function showLoading(message) {
-  document.getElementById("loadingText").textContent =
+  document.getElementById(
+    "loadingText"
+  ).textContent =
     message || "Loading...";
 
-  document
-    .getElementById("loadingOverlay")
-    .classList.remove("hidden");
+  document.getElementById(
+    "loadingOverlay"
+  ).classList.remove("hidden");
 }
 
 
 function hideLoading() {
-  document
-    .getElementById("loadingOverlay")
-    .classList.add("hidden");
+  document.getElementById(
+    "loadingOverlay"
+  ).classList.add("hidden");
 }
 
 
@@ -106,7 +137,8 @@ async function callBackend(payload) {
     }
   );
 
-  const rawText = await response.text();
+  const rawText =
+    await response.text();
 
   try {
     return JSON.parse(rawText);
@@ -119,45 +151,50 @@ async function callBackend(payload) {
 
 
 /* =====================================================
-   SETUP DROPDOWNS
+   SETUP DATA
 ===================================================== */
 
-async function loadLevels() {
-  showLoading("Loading levels...");
+async function loadStationSetupData() {
+  showLoading("Loading setup...");
 
   try {
-    const result = await callBackend({
-      action: "getLevels"
-    });
+    const result =
+      await callBackend({
+        action: "getStationSetupData"
+      });
 
     if (!result.success) {
       throw new Error(
-        result.error || "Unable to load levels."
+        result.error ||
+        "Unable to load setup data."
       );
     }
 
-    const select =
-      document.getElementById("levelSelect");
+    setupData = {
+      levels:
+        Array.isArray(result.levels)
+          ? result.levels
+          : [],
 
-    select.innerHTML =
-      `<option value="">Select level</option>`;
+      classesByLevel:
+        result.classesByLevel || {},
 
-    result.levels.forEach(level => {
-      const option =
-        document.createElement("option");
+      groupsByClass:
+        result.groupsByClass || {}
+    };
 
-      option.value = level;
-      option.textContent = level;
+    populateLevels();
 
-      select.appendChild(option);
-    });
-
-    setText("setupMessage", "Levels loaded.");
+    setText(
+      "setupMessage",
+      "Setup ready."
+    );
 
   } catch (error) {
     setText(
       "setupMessage",
-      "Failed to load levels: " + error.message
+      "Failed to load setup: " +
+      error.message
     );
 
   } finally {
@@ -166,15 +203,42 @@ async function loadLevels() {
 }
 
 
-async function loadClasses() {
+function populateLevels() {
+  const select =
+    document.getElementById(
+      "levelSelect"
+    );
+
+  select.innerHTML =
+    `<option value="">Select level</option>`;
+
+  setupData.levels.forEach(level => {
+    const option =
+      document.createElement("option");
+
+    option.value = level;
+    option.textContent = level;
+
+    select.appendChild(option);
+  });
+}
+
+
+function updateClassesFromMemory() {
   const level =
-    document.getElementById("levelSelect").value;
+    document.getElementById(
+      "levelSelect"
+    ).value;
 
   const classSelect =
-    document.getElementById("classSelect");
+    document.getElementById(
+      "classSelect"
+    );
 
   const groupSelect =
-    document.getElementById("groupSelect");
+    document.getElementById(
+      "groupSelect"
+    );
 
   classSelect.innerHTML =
     `<option value="">Select class</option>`;
@@ -182,102 +246,55 @@ async function loadClasses() {
   groupSelect.innerHTML =
     `<option value="">Select group</option>`;
 
-  if (!level) {
-    return;
-  }
+  const classes =
+    setupData.classesByLevel[level] || [];
 
-  showLoading("Loading classes...");
+  classes.forEach(className => {
+    const option =
+      document.createElement("option");
 
-  try {
-    const result = await callBackend({
-      action: "getClasses",
-      level
-    });
+    option.value = className;
+    option.textContent = className;
 
-    if (!result.success) {
-      throw new Error(
-        result.error || "Unable to load classes."
-      );
-    }
-
-    result.classes.forEach(className => {
-      const option =
-        document.createElement("option");
-
-      option.value = className;
-      option.textContent = className;
-
-      classSelect.appendChild(option);
-    });
-
-  } catch (error) {
-    setText(
-      "setupMessage",
-      "Failed to load classes: " + error.message
-    );
-
-  } finally {
-    hideLoading();
-  }
+    classSelect.appendChild(option);
+  });
 }
 
 
-async function loadGroups() {
+function updateGroupsFromMemory() {
   const className =
-    document.getElementById("classSelect").value;
+    document.getElementById(
+      "classSelect"
+    ).value;
 
   const groupSelect =
-    document.getElementById("groupSelect");
+    document.getElementById(
+      "groupSelect"
+    );
 
   groupSelect.innerHTML =
     `<option value="">Select group</option>`;
 
-  if (!className) {
-    return;
-  }
+  const groups =
+    setupData.groupsByClass[className] || [];
 
-  showLoading("Loading groups...");
+  groups.forEach(groupName => {
+    const option =
+      document.createElement("option");
 
-  try {
-    const result = await callBackend({
-      action: "getGroupsByClass",
-      className
-    });
+    option.value = groupName;
+    option.textContent = groupName;
 
-    if (!result.success) {
-      throw new Error(
-        result.error || "Unable to load groups."
-      );
-    }
-
-    const groups =
-      result.groups || result.groupNames || [];
-
-    groups.forEach(groupName => {
-      const option =
-        document.createElement("option");
-
-      option.value = groupName;
-      option.textContent = groupName;
-
-      groupSelect.appendChild(option);
-    });
-
-  } catch (error) {
-    setText(
-      "setupMessage",
-      "Failed to load groups: " + error.message
-    );
-
-  } finally {
-    hideLoading();
-  }
+    groupSelect.appendChild(option);
+  });
 }
 
 
 function loadStations() {
   const select =
-    document.getElementById("stationSelect");
+    document.getElementById(
+      "stationSelect"
+    );
 
   select.innerHTML =
     `<option value="">Select station</option>`;
@@ -291,85 +308,124 @@ function loadStations() {
 
     select.appendChild(option);
   });
+
+  const previousStation =
+    localStorage.getItem(STATION_KEY);
+
+  if (
+    previousStation &&
+    STATIONS.includes(previousStation)
+  ) {
+    select.value = previousStation;
+  }
 }
 
 
 /* =====================================================
-   LOAD TESTER DATA
+   LOAD GROUP
 ===================================================== */
 
 async function loadTesterGroup() {
   const tester =
-    document.getElementById("testerName").value.trim();
+    document.getElementById(
+      "testerName"
+    ).value.trim();
 
   const testDate =
-    document.getElementById("testDate").value;
-
-  const level =
-    document.getElementById("levelSelect").value;
-
-  const className =
-    document.getElementById("classSelect").value;
-
-  const groupName =
-    document.getElementById("groupSelect").value;
+    document.getElementById(
+      "testDate"
+    ).value;
 
   const station =
-    document.getElementById("stationSelect").value;
+    document.getElementById(
+      "stationSelect"
+    ).value;
+
+  const level =
+    document.getElementById(
+      "levelSelect"
+    ).value;
+
+  const className =
+    document.getElementById(
+      "classSelect"
+    ).value;
+
+  const groupName =
+    document.getElementById(
+      "groupSelect"
+    ).value;
 
   if (!tester) {
     alert("Please enter the tester name.");
-    document.getElementById("testerName").focus();
+
+    document.getElementById(
+      "testerName"
+    ).focus();
+
     return;
   }
 
   if (
     !testDate ||
+    !station ||
     !level ||
     !className ||
-    !groupName ||
-    !station
+    !groupName
   ) {
     alert(
-      "Please complete the date, level, class, group and station."
+      "Please complete all setup selections."
     );
+
     return;
   }
 
   localStorage.setItem(
-    "BVPS_NAPFA_TESTER_NAME",
+    TESTER_NAME_KEY,
     tester
   );
 
+  localStorage.setItem(
+    STATION_KEY,
+    station
+  );
+
   currentContext = {
-    tester,
-    testDate,
-    level,
-    className,
-    groupName,
-    station,
+    tester: tester,
+    testDate: testDate,
+    station: station,
+    level: level,
+    className: className,
+    groupName: groupName,
+
     sessionId:
       `${className}-${station}-${testDate}`
   };
 
-  showLoading("Loading pupils and rubric...");
+  showLoading(
+    "Loading pupils and rubric..."
+  );
 
   try {
-    const [groupResult, rubricResult] =
-      await Promise.all([
-        callBackend({
-          action: "getStationTesterData",
-          className,
-          groupName,
-          station,
-          testDate
-        }),
+    const rubricPromise =
+      getRubricForStation(station);
 
-        callBackend({
-          action: "getStationRubric",
-          station
-        })
-      ]);
+    const groupPromise =
+      callBackend({
+        action: "getStationTesterData",
+        className: className,
+        groupName: groupName,
+        station: station,
+        testDate: testDate
+      });
+
+    const [
+      loadedRubric,
+      groupResult
+    ] = await Promise.all([
+      rubricPromise,
+      groupPromise
+    ]);
 
     if (!groupResult.success) {
       throw new Error(
@@ -378,56 +434,61 @@ async function loadTesterGroup() {
       );
     }
 
-    if (!rubricResult.success) {
-      throw new Error(
-        rubricResult.error ||
-        "Unable to load rubric."
-      );
-    }
-
-    rubricRows =
-      Array.isArray(rubricResult.rubric)
-        ? rubricResult.rubric
-        : [];
+    rubricRows = loadedRubric;
 
     students =
-      groupResult.students.map(student => ({
-        ...student,
+      groupResult.students.map(
+        student => {
+          const absent =
+            Boolean(
+              student.ExistingAbsent
+            );
 
-        Score:
-          student.ExistingScore !== "" &&
-          student.ExistingScore !== null &&
-          student.ExistingScore !== undefined
-            ? String(student.ExistingScore)
-            : "",
+          const originalScore =
+            student.ExistingScore !== "" &&
+            student.ExistingScore !== null &&
+            student.ExistingScore !== undefined
+              ? String(student.ExistingScore)
+              : "";
 
-        Grade:
-          student.ExistingGrade || "",
+          return {
+            ...student,
 
-        Remarks:
-          student.ExistingRemarks || "",
+            Score:
+              absent
+                ? ""
+                : originalScore,
 
-        OriginalScore:
-          student.ExistingScore !== "" &&
-          student.ExistingScore !== null &&
-          student.ExistingScore !== undefined
-            ? String(student.ExistingScore)
-            : "",
+            Grade:
+              absent
+                ? ""
+                : student.ExistingGrade || "",
 
-        OriginalRemarks:
-          student.ExistingRemarks || "",
+            Absent:
+              absent,
 
-        HasExistingResult:
-          Boolean(student.HasExistingResult),
+            OriginalScore:
+              originalScore,
 
-        SaveState:
-          student.HasExistingResult
-            ? "saved"
-            : "blank"
-      }));
+            OriginalAbsent:
+              absent,
+
+            HasExistingResult:
+              Boolean(
+                student.HasExistingResult
+              ),
+
+            SaveState:
+              student.HasExistingResult
+                ? "saved"
+                : "blank"
+          };
+        }
+      );
 
     restoreLocalDraftIfMatching();
-    renderStudentCards();
+
+    renderStudentRows();
     updateTesterHeader();
     updateProgressCounts();
 
@@ -435,12 +496,11 @@ async function loadTesterGroup() {
       calculateChangedCount() > 0;
 
     updateSaveBar();
-
     showStep("scores");
 
   } catch (error) {
     alert(
-      "Unable to load tester data: " +
+      "Unable to load group: " +
       error.message
     );
 
@@ -450,98 +510,147 @@ async function loadTesterGroup() {
 }
 
 
+async function getRubricForStation(station) {
+  if (rubricCache[station]) {
+    return rubricCache[station];
+  }
+
+  const result =
+    await callBackend({
+      action: "getStationRubric",
+      station: station
+    });
+
+  if (!result.success) {
+    throw new Error(
+      result.error ||
+      "Unable to load rubric."
+    );
+  }
+
+  const rows =
+    Array.isArray(result.rubric)
+      ? result.rubric
+      : [];
+
+  rubricCache[station] = rows;
+
+  return rows;
+}
+
+
 /* =====================================================
-   STUDENT CARDS
+   PUPIL ROWS
 ===================================================== */
 
-function renderStudentCards() {
-  const grid =
-    document.getElementById("studentGrid");
+function renderStudentRows() {
+  const container =
+    document.getElementById(
+      "studentList"
+    );
 
-  grid.innerHTML = "";
+  container.innerHTML = "";
 
-  students.forEach((student, index) => {
-    const card =
-      document.createElement("div");
+  students.forEach(
+    (student, index) => {
+      const row =
+        document.createElement("div");
 
-    card.className =
-      "student-card " +
-      cardStateClass(student);
+      row.id =
+        `student-row-${safeId(student.ID)}`;
 
-    card.id =
-      `student-card-${safeId(student.ID)}`;
+      row.className =
+        "student-row " +
+        rowStateClass(student);
 
-    const inputMode =
-      currentContext.station === "Shuttle Run"
-        ? "decimal"
-        : "numeric";
+      const inputMode =
+        currentContext.station ===
+          "Shuttle Run"
+          ? "decimal"
+          : "numeric";
 
-    const stepValue =
-      currentContext.station === "Shuttle Run"
-        ? "0.1"
-        : "1";
+      const step =
+        currentContext.station ===
+          "Shuttle Run"
+          ? "0.1"
+          : "1";
 
-    card.innerHTML = `
-      <div class="student-top">
-        <div class="register-number">
-          ${escapeHtml(student.No)}
+      row.innerHTML = `
+        <div class="student-main">
+          <div class="register-number">
+            ${escapeHtml(student.No)}
+          </div>
+
+          <div class="student-name">
+            ${escapeHtml(student.Name)}
+          </div>
+
+          <div class="score-wrap">
+            <input
+              id="score-${safeId(student.ID)}"
+              class="score-input"
+              type="number"
+              inputmode="${inputMode}"
+              enterkeyhint="next"
+              step="${step}"
+              value="${escapeAttribute(student.Score)}"
+              placeholder="Score"
+              ${student.Absent ? "disabled" : ""}
+              oninput="handleScoreInput(${index}, this.value)"
+              onkeydown="handleScoreKeyDown(event, ${index})"
+              onfocus="this.select()"
+            >
+
+            <div class="unit-label">
+              ${escapeHtml(getStationUnit())}
+            </div>
+          </div>
+
+          <div
+            id="grade-${safeId(student.ID)}"
+            class="grade-badge ${gradeClass(student.Grade)}"
+          >
+            ${
+              student.Absent
+                ? "—"
+                : escapeHtml(student.Grade || "—")
+            }
+          </div>
         </div>
 
-        <div class="student-name">
-          ${escapeHtml(student.Name)}
+        <div class="student-lower">
+          <div
+            id="status-${safeId(student.ID)}"
+            class="row-status"
+          >
+            ${escapeHtml(rowStatusText(student))}
+          </div>
+
+          <label class="absence-control">
+            <input
+              id="absent-${safeId(student.ID)}"
+              type="checkbox"
+              ${student.Absent ? "checked" : ""}
+              onchange="handleAbsentChange(${index}, this.checked)"
+            >
+
+            <span>Absent</span>
+          </label>
         </div>
+      `;
 
-        <div
-          id="grade-${safeId(student.ID)}"
-          class="grade-badge ${gradeClass(student.Grade)}"
-        >
-          ${escapeHtml(student.Grade || "—")}
-        </div>
-      </div>
-
-      <div class="score-row">
-        <input
-          id="score-${safeId(student.ID)}"
-          class="score-input"
-          type="number"
-          inputmode="${inputMode}"
-          step="${stepValue}"
-          value="${escapeAttribute(student.Score)}"
-          placeholder="Score"
-          oninput="handleScoreInput(${index}, this.value)"
-          onfocus="this.select()"
-        >
-
-        <div class="unit-label">
-          ${escapeHtml(getStationUnit())}
-        </div>
-      </div>
-
-      <input
-        id="remarks-${safeId(student.ID)}"
-        class="remarks-input"
-        type="text"
-        value="${escapeAttribute(student.Remarks)}"
-        placeholder="Remarks (optional)"
-        oninput="handleRemarksInput(${index}, this.value)"
-      >
-
-      <div
-        id="status-${safeId(student.ID)}"
-        class="card-status"
-      >
-        ${escapeHtml(cardStatusText(student))}
-      </div>
-    `;
-
-    grid.appendChild(card);
-  });
+      container.appendChild(row);
+    }
+  );
 }
 
 
 function handleScoreInput(index, value) {
-  const student =
-    students[index];
+  const student = students[index];
+
+  if (student.Absent) {
+    return;
+  }
 
   student.Score = value;
 
@@ -569,36 +678,117 @@ function handleScoreInput(index, value) {
         ? "saved"
         : "blank";
 
-  refreshStudentCard(student);
+  refreshStudentRow(student);
   markDraftChanged();
 }
 
 
-function handleRemarksInput(index, value) {
-  const student =
-    students[index];
+function handleScoreKeyDown(event, index) {
+  if (
+    event.key !== "Enter" &&
+    event.key !== "Next"
+  ) {
+    return;
+  }
 
-  student.Remarks = value;
+  event.preventDefault();
 
-  student.SaveState =
-    isStudentChanged(student)
-      ? "edited"
-      : student.HasExistingResult
-        ? "saved"
-        : "blank";
+  focusNextAvailableScore(index);
+}
 
-  refreshStudentCard(student);
+
+function focusNextAvailableScore(currentIndex) {
+  for (
+    let index = currentIndex + 1;
+    index < students.length;
+    index++
+  ) {
+    if (students[index].Absent) {
+      continue;
+    }
+
+    const input =
+      document.getElementById(
+        `score-${safeId(
+          students[index].ID
+        )}`
+      );
+
+    if (input) {
+      input.focus();
+      input.select();
+      return;
+    }
+  }
+}
+
+
+function handleAbsentChange(index, checked) {
+  const student = students[index];
+
+  const checkbox =
+    document.getElementById(
+      `absent-${safeId(student.ID)}`
+    );
+
+  if (checked) {
+    const confirmed = confirm(
+      `Mark ${student.Name} as absent?`
+    );
+
+    if (!confirmed) {
+      if (checkbox) {
+        checkbox.checked = false;
+      }
+
+      return;
+    }
+
+    student.Absent = true;
+    student.Score = "";
+    student.Grade = "";
+    student.SaveState = "edited";
+
+  } else {
+    const confirmed = confirm(
+      `Remove absent status for ${student.Name}?`
+    );
+
+    if (!confirmed) {
+      if (checkbox) {
+        checkbox.checked = true;
+      }
+
+      return;
+    }
+
+    student.Absent = false;
+
+    student.SaveState =
+      isStudentChanged(student)
+        ? "edited"
+        : student.HasExistingResult
+          ? "saved"
+          : "blank";
+  }
+
+  refreshStudentRow(student);
   markDraftChanged();
 }
 
 
-function refreshStudentCard(student) {
+function refreshStudentRow(student) {
   const id =
     safeId(student.ID);
 
-  const card =
+  const row =
     document.getElementById(
-      `student-card-${id}`
+      `student-row-${id}`
+    );
+
+  const scoreInput =
+    document.getElementById(
+      `score-${id}`
     );
 
   const grade =
@@ -611,10 +801,23 @@ function refreshStudentCard(student) {
       `status-${id}`
     );
 
-  if (card) {
-    card.className =
-      "student-card " +
-      cardStateClass(student);
+  const checkbox =
+    document.getElementById(
+      `absent-${id}`
+    );
+
+  if (row) {
+    row.className =
+      "student-row " +
+      rowStateClass(student);
+  }
+
+  if (scoreInput) {
+    scoreInput.disabled =
+      student.Absent;
+
+    scoreInput.value =
+      student.Score;
   }
 
   if (grade) {
@@ -623,12 +826,19 @@ function refreshStudentCard(student) {
       gradeClass(student.Grade);
 
     grade.textContent =
-      student.Grade || "—";
+      student.Absent
+        ? "—"
+        : student.Grade || "—";
   }
 
   if (status) {
     status.textContent =
-      cardStatusText(student);
+      rowStatusText(student);
+  }
+
+  if (checkbox) {
+    checkbox.checked =
+      student.Absent;
   }
 
   updateProgressCounts();
@@ -636,9 +846,13 @@ function refreshStudentCard(student) {
 }
 
 
-function cardStateClass(student) {
+function rowStateClass(student) {
   if (student.SaveState === "failed") {
     return "failed";
+  }
+
+  if (student.Absent) {
+    return "absent";
   }
 
   if (student.SaveState === "edited") {
@@ -656,13 +870,19 @@ function cardStateClass(student) {
 }
 
 
-function cardStatusText(student) {
+function rowStatusText(student) {
   if (student.SaveState === "saving") {
     return "Saving...";
   }
 
   if (student.SaveState === "failed") {
     return "Save failed";
+  }
+
+  if (student.Absent) {
+    return student.SaveState === "edited"
+      ? "Absent — unsaved"
+      : "Absent";
   }
 
   if (student.SaveState === "saved") {
@@ -675,9 +895,7 @@ function cardStatusText(student) {
       : "Unsaved";
   }
 
-  return student.HasExistingResult
-    ? "Existing result"
-    : "";
+  return "";
 }
 
 
@@ -698,7 +916,8 @@ function calculateGradePreview(
           normaliseText(station) &&
         normaliseGender(row.Gender) ===
           normaliseGender(gender) &&
-        Number(row.Age) === Number(age)
+        Number(row.Age) ===
+          Number(age)
       );
     });
 
@@ -708,9 +927,11 @@ function calculateGradePreview(
   for (const grade of gradeOrder) {
     const row =
       matchingRows.find(item => {
-        return String(item.Grade)
-          .trim()
-          .toUpperCase() === grade;
+        return (
+          String(item.Grade || "")
+            .trim()
+            .toUpperCase() === grade
+        );
       });
 
     if (!row) {
@@ -727,11 +948,8 @@ function calculateGradePreview(
       row.Max !== null &&
       row.Max !== undefined;
 
-    const min =
-      Number(row.Min);
-
-    const max =
-      Number(row.Max);
+    const min = Number(row.Min);
+    const max = Number(row.Max);
 
     if (
       hasMin &&
@@ -796,30 +1014,38 @@ function normaliseText(value) {
 
 
 /* =====================================================
-   SAVE GROUP
+   SAVE
 ===================================================== */
 
 async function saveGroupResults() {
-  const enteredStudents =
+  const completedStudents =
     students.filter(student => {
-      return student.Score !== "";
+      return (
+        student.Absent ||
+        student.Score !== ""
+      );
     });
 
-  if (enteredStudents.length === 0) {
-    alert("No scores have been entered.");
+  if (completedStudents.length === 0) {
+    alert(
+      "No scores or absent pupils have been recorded."
+    );
+
     return;
   }
 
   const missing =
     students.filter(student => {
-      return student.Score === "";
+      return (
+        !student.Absent &&
+        student.Score === ""
+      );
     });
 
   if (missing.length > 0) {
-    const proceed =
-      confirm(
-        `${missing.length} pupil(s) have no score. Save the completed pupils only?`
-      );
+    const proceed = confirm(
+      `${missing.length} pupil(s) have no score. Save the completed pupils only?`
+    );
 
     if (!proceed) {
       return;
@@ -827,18 +1053,26 @@ async function saveGroupResults() {
   }
 
   const changedStudents =
-    enteredStudents.filter(isStudentChanged);
+    completedStudents.filter(
+      isStudentChanged
+    );
 
   if (changedStudents.length === 0) {
-    alert("There are no new or changed results to save.");
+    alert(
+      "There are no new or changed results to save."
+    );
+
     return;
   }
 
   const invalidStudent =
     changedStudents.find(student => {
-      return !isScoreValid(
-        currentContext.station,
-        student.Score
+      return (
+        !student.Absent &&
+        !isScoreValid(
+          currentContext.station,
+          student.Score
+        )
       );
     });
 
@@ -847,32 +1081,38 @@ async function saveGroupResults() {
       `Check the score for ${invalidStudent.Name}.`
     );
 
-    document
-      .getElementById(
+    const input =
+      document.getElementById(
         `score-${safeId(invalidStudent.ID)}`
-      )
-      .focus();
+      );
+
+    if (input) {
+      input.focus();
+    }
 
     return;
   }
 
   changedStudents.forEach(student => {
     student.SaveState = "saving";
-    refreshStudentCard(student);
+    refreshStudentRow(student);
   });
 
   hasUnsavedChanges = true;
   saveInProgress = true;
-  updateSaveBar();
 
   saveLocalDraft();
+  updateSaveBar();
 
-  showLoading("Saving group results...");
+  showLoading(
+    "Saving group results..."
+  );
 
   try {
     const result =
       await callBackend({
-        action: "saveStationResultsBatch",
+        action:
+          "saveStationResultsBatch",
 
         sessionId:
           currentContext.sessionId,
@@ -895,8 +1135,14 @@ async function saveGroupResults() {
         results:
           changedStudents.map(student => ({
             ID: student.ID,
-            score: Number(student.Score),
-            remarks: student.Remarks || ""
+
+            score:
+              student.Absent
+                ? ""
+                : Number(student.Score),
+
+            absent:
+              Boolean(student.Absent)
           }))
       });
 
@@ -922,20 +1168,30 @@ async function saveGroupResults() {
         );
 
       if (returned) {
+        student.Absent =
+          Boolean(returned.Absent);
+
+        student.Score =
+          student.Absent
+            ? ""
+            : String(returned.Score);
+
         student.Grade =
-          returned.Grade || student.Grade;
+          student.Absent
+            ? ""
+            : returned.Grade || "";
 
         student.SaveState = "saved";
         student.HasExistingResult = true;
 
         student.OriginalScore =
-          String(student.Score);
+          student.Score;
 
-        student.OriginalRemarks =
-          student.Remarks || "";
+        student.OriginalAbsent =
+          student.Absent;
       }
 
-      refreshStudentCard(student);
+      refreshStudentRow(student);
     });
 
     hasUnsavedChanges = false;
@@ -947,7 +1203,7 @@ async function saveGroupResults() {
   } catch (error) {
     changedStudents.forEach(student => {
       student.SaveState = "failed";
-      refreshStudentCard(student);
+      refreshStudentRow(student);
     });
 
     hasUnsavedChanges = true;
@@ -972,34 +1228,55 @@ async function saveGroupResults() {
 
 function renderReviewTable(saveResult) {
   const tbody =
-    document.getElementById("reviewBody");
+    document.getElementById(
+      "reviewBody"
+    );
 
   tbody.innerHTML = "";
 
-  const savedStudents =
+  const completedStudents =
     students
       .filter(student => {
-        return student.Score !== "";
+        return (
+          student.Absent ||
+          student.Score !== ""
+        );
       })
       .sort((a, b) => {
         return Number(a.No) - Number(b.No);
       });
 
-  savedStudents.forEach(student => {
+  completedStudents.forEach(student => {
     const row =
       document.createElement("tr");
 
     row.innerHTML = `
       <td>${escapeHtml(student.No)}</td>
       <td>${escapeHtml(student.Name)}</td>
-      <td>${escapeHtml(student.Score)}</td>
-      <td>${escapeHtml(student.Grade)}</td>
+
       <td>
-        ${student.Grade === "F"
-          ? "Completed - No Grade"
-          : "Completed"}
+        ${
+          student.Absent
+            ? "—"
+            : escapeHtml(student.Score)
+        }
       </td>
-      <td>${escapeHtml(student.Remarks)}</td>
+
+      <td>
+        ${
+          student.Absent
+            ? "—"
+            : escapeHtml(student.Grade)
+        }
+      </td>
+
+      <td>
+        ${
+          student.Absent
+            ? "Absent"
+            : "Completed"
+        }
+      </td>
     `;
 
     tbody.appendChild(row);
@@ -1019,7 +1296,17 @@ function returnToScores() {
 }
 
 
-function startAnotherGroup() {
+function testNextGroup() {
+  if (hasUnsavedChanges) {
+    const proceed = confirm(
+      "Unsaved changes remain. Leave this group?"
+    );
+
+    if (!proceed) {
+      return;
+    }
+  }
+
   students = [];
   rubricRows = [];
   currentContext = null;
@@ -1028,14 +1315,58 @@ function startAnotherGroup() {
   saveInProgress = false;
 
   clearLocalDraft();
-
-  document.getElementById("groupSelect").value = "";
-  document.getElementById("stationSelect").value = "";
-
-  clearElement("studentGrid");
+  clearElement("studentList");
   clearElement("reviewBody");
 
+  document.getElementById(
+    "groupSelect"
+  ).value = "";
+
   showStep("setup");
+
+  setText(
+    "setupMessage",
+    "Select the next group. Station, tester, date, level and class have been kept."
+  );
+}
+
+
+function changeStation() {
+  if (hasUnsavedChanges) {
+    const proceed = confirm(
+      "Unsaved changes remain. Change station?"
+    );
+
+    if (!proceed) {
+      return;
+    }
+  }
+
+  students = [];
+  rubricRows = [];
+  currentContext = null;
+
+  hasUnsavedChanges = false;
+  saveInProgress = false;
+
+  clearLocalDraft();
+  clearElement("studentList");
+  clearElement("reviewBody");
+
+  document.getElementById(
+    "stationSelect"
+  ).value = "";
+
+  document.getElementById(
+    "groupSelect"
+  ).value = "";
+
+  showStep("setup");
+
+  setText(
+    "setupMessage",
+    "Select a new station and group."
+  );
 }
 
 
@@ -1059,13 +1390,14 @@ function saveLocalDraft() {
   }
 
   const draft = {
-    context: currentContext,
+    context:
+      currentContext,
 
     students:
       students.map(student => ({
         ID: student.ID,
         Score: student.Score,
-        Remarks: student.Remarks
+        Absent: student.Absent
       }))
   };
 
@@ -1104,10 +1436,9 @@ function restoreLocalDraftIfMatching() {
       return;
     }
 
-    const restore =
-      confirm(
-        "Unsaved scores were found for this group and station. Restore them?"
-      );
+    const restore = confirm(
+      "Unsaved scores were found for this group and station. Restore them?"
+    );
 
     if (!restore) {
       clearLocalDraft();
@@ -1132,13 +1463,18 @@ function restoreLocalDraftIfMatching() {
         return;
       }
 
+      student.Absent =
+        Boolean(saved.Absent);
+
       student.Score =
-        saved.Score || "";
+        student.Absent
+          ? ""
+          : String(saved.Score || "");
 
-      student.Remarks =
-        saved.Remarks || "";
-
-      if (student.Score !== "") {
+      if (
+        !student.Absent &&
+        student.Score !== ""
+      ) {
         student.Grade =
           calculateGradePreview(
             currentContext.station,
@@ -1146,6 +1482,8 @@ function restoreLocalDraftIfMatching() {
             student.AgeUsed,
             Number(student.Score)
           );
+      } else {
+        student.Grade = "";
       }
 
       student.SaveState =
@@ -1170,7 +1508,7 @@ function clearLocalDraft() {
 
 
 /* =====================================================
-   COUNTS / UI
+   COUNTS AND UI
 ===================================================== */
 
 function updateTesterHeader() {
@@ -1191,18 +1529,28 @@ function updateTesterHeader() {
 function updateProgressCounts() {
   const entered =
     students.filter(student => {
-      return student.Score !== "";
+      return (
+        !student.Absent &&
+        student.Score !== ""
+      );
+    }).length;
+
+  const absent =
+    students.filter(student => {
+      return student.Absent;
     }).length;
 
   const missing =
-    students.length - entered;
-
-  const changed =
-    calculateChangedCount();
+    students.filter(student => {
+      return (
+        !student.Absent &&
+        student.Score === ""
+      );
+    }).length;
 
   setText("enteredCount", entered);
+  setText("absentCount", absent);
   setText("missingCount", missing);
-  setText("changedCount", changed);
 }
 
 
@@ -1215,6 +1563,7 @@ function updateSaveBar() {
       "saveBarMessage",
       "Saving results. Do not close the page."
     );
+
     return;
   }
 
@@ -1223,6 +1572,7 @@ function updateSaveBar() {
       "saveBarMessage",
       "No unsaved changes"
     );
+
     return;
   }
 
@@ -1234,7 +1584,9 @@ function updateSaveBar() {
 
 
 function calculateChangedCount() {
-  return students.filter(isStudentChanged).length;
+  return students.filter(
+    isStudentChanged
+  ).length;
 }
 
 
@@ -1242,41 +1594,56 @@ function isStudentChanged(student) {
   return (
     String(student.Score || "") !==
       String(student.OriginalScore || "") ||
-    String(student.Remarks || "") !==
-      String(student.OriginalRemarks || "")
+    Boolean(student.Absent) !==
+      Boolean(student.OriginalAbsent)
   );
 }
 
 
 function showStep(step) {
   const setup =
-    document.getElementById("stepSetup");
+    document.getElementById(
+      "stepSetup"
+    );
 
   const scores =
-    document.getElementById("stepScores");
+    document.getElementById(
+      "stepScores"
+    );
 
   const review =
-    document.getElementById("stepReview");
+    document.getElementById(
+      "stepReview"
+    );
 
   setup.classList.add("hidden");
   scores.classList.add("hidden");
   review.classList.add("hidden");
 
   const progressSetup =
-    document.getElementById("progressSetup");
+    document.getElementById(
+      "progressSetup"
+    );
 
   const progressScores =
-    document.getElementById("progressScores");
+    document.getElementById(
+      "progressScores"
+    );
 
   const progressReview =
-    document.getElementById("progressReview");
+    document.getElementById(
+      "progressReview"
+    );
 
   [
     progressSetup,
     progressScores,
     progressReview
   ].forEach(item => {
-    item.classList.remove("active", "done");
+    item.classList.remove(
+      "active",
+      "done"
+    );
   });
 
   if (step === "setup") {
@@ -1319,8 +1686,7 @@ function isScoreValid(station, rawScore) {
     return false;
   }
 
-  const score =
-    Number(rawScore);
+  const score = Number(rawScore);
 
   if (Number.isNaN(score)) {
     return false;
@@ -1358,8 +1724,7 @@ function isScoreValid(station, rawScore) {
     }
   };
 
-  const range =
-    ranges[station];
+  const range = ranges[station];
 
   if (!range) {
     return false;
@@ -1386,20 +1751,35 @@ function isScoreValid(station, rawScore) {
 function getStationUnit() {
   const row =
     rubricRows.find(item => {
-      return normaliseText(item.Station) ===
-        normaliseText(currentContext.station);
+      return (
+        normaliseText(item.Station) ===
+        normaliseText(
+          currentContext.station
+        )
+      );
     });
 
-  return row && row.Unit
-    ? row.Unit
-    : currentContext.station === "Shuttle Run"
-      ? "sec"
-      : currentContext.station ===
-          "Standing Broad Jump" ||
-        currentContext.station ===
-          "Sit and Reach"
-        ? "cm"
-        : "reps";
+  if (row && row.Unit) {
+    return row.Unit;
+  }
+
+  if (
+    currentContext.station ===
+    "Shuttle Run"
+  ) {
+    return "sec";
+  }
+
+  if (
+    currentContext.station ===
+      "Standing Broad Jump" ||
+    currentContext.station ===
+      "Sit and Reach"
+  ) {
+    return "cm";
+  }
+
+  return "reps";
 }
 
 
@@ -1421,7 +1801,10 @@ function gradeClass(grade) {
 
 function safeId(value) {
   return String(value || "")
-    .replace(/[^a-zA-Z0-9_-]/g, "_");
+    .replace(
+      /[^a-zA-Z0-9_-]/g,
+      "_"
+    );
 }
 
 
