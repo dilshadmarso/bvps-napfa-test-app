@@ -2,12 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, maximum-scale=1"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>BVPS NAPFA 5-Station Tester</title>
 
   <style>
@@ -35,10 +30,7 @@
       --shadow: 0 5px 18px rgba(20, 39, 73, 0.09);
     }
 
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
     body {
       margin: 0;
@@ -47,19 +39,9 @@
       color: var(--grey-800);
     }
 
-    button,
-    input,
-    select {
-      font: inherit;
-    }
-
-    button {
-      touch-action: manipulation;
-    }
-
-    .hidden {
-      display: none !important;
-    }
+    button, input, select { font: inherit; }
+    button { touch-action: manipulation; }
+    .hidden { display: none !important; }
 
     .page {
       width: min(100%, 760px);
@@ -71,25 +53,13 @@
       margin-bottom: 11px;
       padding: 17px;
       border-radius: 19px;
-      background: linear-gradient(
-        135deg,
-        var(--navy),
-        var(--navy-dark)
-      );
+      background: linear-gradient(135deg, var(--navy), var(--navy-dark));
       color: white;
       box-shadow: var(--shadow);
     }
 
-    .app-header h1 {
-      margin: 0;
-      font-size: 22px;
-    }
-
-    .app-header p {
-      margin: 7px 0 0;
-      font-size: 13px;
-      opacity: 0.9;
-    }
+    .app-header h1 { margin: 0; font-size: 22px; }
+    .app-header p { margin: 7px 0 0; font-size: 13px; opacity: 0.9; }
 
     .progress {
       display: grid;
@@ -109,15 +79,8 @@
       font-weight: 700;
     }
 
-    .progress-item.active {
-      background: var(--navy);
-      color: white;
-    }
-
-    .progress-item.done {
-      background: var(--green-light);
-      color: var(--green);
-    }
+    .progress-item.active { background: var(--navy); color: white; }
+    .progress-item.done { background: var(--green-light); color: var(--green); }
 
     .panel {
       padding: 15px;
@@ -126,11 +89,7 @@
       box-shadow: var(--shadow);
     }
 
-    .panel h2 {
-      margin: 0 0 13px;
-      color: var(--navy);
-      font-size: 20px;
-    }
+    .panel h2 { margin: 0 0 13px; color: var(--navy); font-size: 20px; }
 
     .form-grid {
       display: grid;
@@ -138,15 +97,9 @@
       gap: 11px;
     }
 
-    .field label {
-      display: block;
-      margin-bottom: 5px;
-      font-size: 13px;
-      font-weight: 700;
-    }
+    .field label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 700; }
 
-    .field input,
-    .field select {
+    .field input, .field select {
       width: 100%;
       min-height: 46px;
       padding: 10px 11px;
@@ -156,8 +109,7 @@
       font-size: 16px;
     }
 
-    .information,
-    .warning {
+    .information, .warning {
       margin: 12px 0;
       padding: 11px;
       border-radius: 11px;
@@ -165,22 +117,10 @@
       font-size: 13px;
     }
 
-    .information {
-      border-left: 5px solid var(--navy);
-      background: var(--blue-light);
-    }
+    .information { border-left: 5px solid var(--navy); background: var(--blue-light); }
+    .warning { border-left: 5px solid #df991c; background: var(--amber-light); }
 
-    .warning {
-      border-left: 5px solid #df991c;
-      background: var(--amber-light);
-    }
-
-    .message {
-      min-height: 20px;
-      margin: 11px 0;
-      font-size: 13px;
-      font-weight: 700;
-    }
+    .message { min-height: 20px; margin: 11px 0; font-size: 13px; font-weight: 700; }
 
     .action-row {
       display: flex;
@@ -198,26 +138,12 @@
       cursor: pointer;
     }
 
-    .btn-primary {
-      background: var(--navy);
-      color: white;
-    }
+    .btn-primary { background: var(--navy); color: white; }
+    .btn-secondary { background: var(--grey-100); color: var(--navy); }
+    .btn-danger { background: var(--red-light); color: var(--red); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .btn-secondary {
-      background: var(--grey-100);
-      color: var(--navy);
-    }
-
-    .btn-danger {
-      background: var(--red-light);
-      color: var(--red);
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
+    /* ── Tester header ── */
     .tester-header {
       position: sticky;
       top: 0;
@@ -225,26 +151,17 @@
       margin: -15px -15px 13px;
       padding: 12px 15px;
       border-radius: 19px 19px 14px 14px;
-      background: rgba(255, 255, 255, 0.97);
-      box-shadow: 0 5px 15px rgba(20, 39, 73, 0.11);
+      background: rgba(255,255,255,0.97);
+      box-shadow: 0 5px 15px rgba(20,39,73,0.11);
       backdrop-filter: blur(8px);
     }
 
-    .tester-title {
-      font-size: 18px;
-      font-weight: 800;
-      color: var(--navy);
-    }
-
-    .tester-subtitle {
-      margin-top: 4px;
-      font-size: 12px;
-      color: var(--grey-500);
-    }
+    .tester-title { font-size: 18px; font-weight: 800; color: var(--navy); }
+    .tester-subtitle { margin-top: 4px; font-size: 12px; color: var(--grey-500); }
 
     .progress-strip {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 6px;
       margin-top: 9px;
     }
@@ -264,10 +181,17 @@
       color: var(--navy);
     }
 
+    .progress-number.num-green { color: var(--green); }
+    .progress-number.num-red   { color: var(--red); }
+    .progress-number.num-grey  { color: var(--grey-400); }
+
+    /* ── Student list ── */
     .student-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
+      /* bottom padding so last row isn't hidden behind save bar */
+      padding-bottom: 110px;
     }
 
     .student-row {
@@ -275,34 +199,18 @@
       border: 2px solid var(--grey-200);
       border-radius: 15px;
       background: white;
-      transition:
-        border-color 0.15s,
-        background 0.15s;
+      transition: border-color 0.15s, background 0.15s;
     }
 
-    .student-row.complete {
-      border-color: var(--green);
-      background: var(--green-light);
-    }
+    .student-row.complete { border-color: var(--green); background: var(--green-light); }
+    .student-row.edited   { border-color: #d89516; background: var(--amber-light); }
+    .student-row.absent   { border-color: var(--grey-400); background: var(--grey-100); }
+    .student-row.failed   { border-color: var(--red); background: var(--red-light); }
 
-    .student-row.edited {
-      border-color: #d89516;
-      background: var(--amber-light);
-    }
-
-    .student-row.absent {
-      border-color: var(--grey-400);
-      background: var(--grey-100);
-    }
-
-    .student-row.failed {
-      border-color: var(--red);
-      background: var(--red-light);
-    }
-
+    /* 5 cols: reg | name | score | grade | absent-btn */
     .student-main {
       display: grid;
-      grid-template-columns: 44px minmax(0, 1fr) 108px 42px;
+      grid-template-columns: 44px minmax(0,1fr) 108px 42px 80px;
       gap: 8px;
       align-items: center;
     }
@@ -315,18 +223,9 @@
       color: var(--navy);
     }
 
-    .student-name {
-      font-size: 13px;
-      line-height: 1.2;
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
+    .student-name { font-size: 13px; line-height: 1.2; font-weight: 700; overflow-wrap: anywhere; }
 
-    .score-wrap {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 3px;
-    }
+    .score-wrap { display: grid; grid-template-columns: 1fr; gap: 3px; }
 
     .score-input {
       width: 100%;
@@ -340,22 +239,20 @@
       text-align: center;
     }
 
-    .score-input:focus {
-      outline: none;
-      border-color: var(--navy);
-    }
+    .score-input:focus { outline: none; border-color: var(--navy); }
+    .score-input:disabled { background: var(--grey-200); color: var(--grey-500); }
 
-    .score-input:disabled {
-      background: var(--grey-200);
-      color: var(--grey-500);
-    }
-
-    .unit-label {
+    /* Inline validation hint */
+    .score-input.input-error { border-color: var(--red); background: var(--red-light); }
+    .score-hint {
       font-size: 10px;
       font-weight: 700;
       text-align: center;
-      color: var(--grey-500);
+      color: var(--red);
+      min-height: 13px;
     }
+
+    .unit-label { font-size: 10px; font-weight: 700; text-align: center; color: var(--grey-500); }
 
     .grade-badge {
       min-width: 39px;
@@ -367,22 +264,33 @@
       font-weight: 900;
     }
 
-    .grade-a,
-    .grade-b,
-    .grade-c {
-      background: var(--green-light);
-      color: var(--green);
+    .grade-a, .grade-b, .grade-c { background: var(--green-light); color: var(--green); }
+    .grade-d, .grade-e           { background: var(--amber-light); color: var(--amber); }
+    .grade-f                     { background: var(--red-light); color: var(--red); }
+
+    /* Absent toggle button */
+    .absent-btn {
+      min-height: 45px;
+      padding: 6px 8px;
+      border: 2px solid var(--grey-200);
+      border-radius: 11px;
+      background: white;
+      color: var(--grey-500);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      line-height: 1.2;
     }
 
-    .grade-d,
-    .grade-e {
-      background: var(--amber-light);
-      color: var(--amber);
-    }
-
-    .grade-f {
+    .absent-btn.is-absent {
+      border-color: var(--red);
       background: var(--red-light);
       color: var(--red);
+    }
+
+    .absent-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
 
     .student-lower {
@@ -395,35 +303,9 @@
       border-top: 1px solid var(--grey-200);
     }
 
-    .row-status {
-      color: var(--grey-500);
-      font-size: 11px;
-      font-weight: 700;
-    }
+    .row-status { color: var(--grey-500); font-size: 11px; font-weight: 700; }
 
-    .absence-control {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 8px;
-      border: 1px solid var(--grey-200);
-      border-radius: 9px;
-      background: white;
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .absence-control input {
-      width: 18px;
-      height: 18px;
-      margin: 0;
-    }
-
-    .student-row.absent .absence-control {
-      border-color: var(--red);
-      color: var(--red);
-    }
-
+    /* ── Save bar ── */
     .save-bar {
       position: sticky;
       bottom: 0;
@@ -431,47 +313,50 @@
       margin: 14px -15px -15px;
       padding: 10px 15px;
       border-radius: 14px 14px 19px 19px;
-      background: rgba(255, 255, 255, 0.98);
-      box-shadow: 0 -5px 16px rgba(20, 39, 73, 0.10);
+      background: rgba(255,255,255,0.98);
+      box-shadow: 0 -5px 16px rgba(20,39,73,0.10);
     }
 
-    .save-bar-message {
-      margin-bottom: 7px;
+    .save-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .save-bar-text {
+      flex: 1;
       font-size: 11px;
       font-weight: 700;
-      text-align: center;
+      color: var(--grey-500);
     }
 
-    .save-bar .btn {
-      width: 100%;
+    .save-bar-text strong {
+      display: block;
+      font-size: 13px;
+      color: var(--grey-800);
     }
 
+    .save-bar .btn { min-width: 140px; }
+
+    /* ── Review ── */
     .review-table-wrapper {
       overflow-x: auto;
       border: 1px solid var(--grey-200);
       border-radius: 12px;
     }
 
-    table {
-      width: 100%;
-      min-width: 580px;
-      border-collapse: collapse;
-      background: white;
-    }
+    table { width: 100%; min-width: 580px; border-collapse: collapse; background: white; }
 
-    th,
-    td {
+    th, td {
       padding: 9px;
       border-bottom: 1px solid var(--grey-200);
       text-align: left;
       font-size: 12px;
     }
 
-    th {
-      background: var(--grey-100);
-      color: var(--navy);
-      white-space: nowrap;
-    }
+    th { background: var(--grey-100); color: var(--navy); white-space: nowrap; }
+
+    tfoot td { background: var(--grey-50); font-weight: 700; color: var(--navy); border-top: 2px solid var(--grey-200); border-bottom: 0; }
 
     .success-box {
       margin: 12px 0;
@@ -482,6 +367,7 @@
       font-weight: 700;
     }
 
+    /* ── Loading overlay ── */
     .loading-overlay {
       position: fixed;
       inset: 0;
@@ -490,7 +376,7 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
-      background: rgba(15, 28, 48, 0.56);
+      background: rgba(15,28,48,0.56);
     }
 
     .loading-card {
@@ -512,71 +398,33 @@
       animation: spin 0.75s linear infinite;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Responsive ── */
     @media (max-width: 650px) {
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
+      .form-grid { grid-template-columns: 1fr; }
 
       .student-main {
-        grid-template-columns:
-          38px
-          minmax(0, 1fr)
-          88px
-          38px;
+        grid-template-columns: 38px minmax(0,1fr) 88px 38px 68px;
         gap: 6px;
       }
 
-      .register-number {
-        font-size: 22px;
-      }
-
-      .student-name {
-        font-size: 11px;
-      }
-
-      .score-input {
-        min-height: 42px;
-        font-size: 18px;
-      }
-
-      .grade-badge {
-        min-width: 36px;
-        padding: 7px 4px;
-        font-size: 16px;
-      }
-
-      .student-lower {
-        align-items: flex-end;
-      }
+      .register-number { font-size: 22px; }
+      .student-name { font-size: 11px; }
+      .score-input { min-height: 42px; font-size: 18px; }
+      .grade-badge { min-width: 36px; padding: 7px 4px; font-size: 16px; }
+      .student-lower { align-items: flex-end; }
+      .absent-btn { min-height: 42px; font-size: 10px; }
     }
 
     @media (max-width: 390px) {
       .student-main {
-        grid-template-columns:
-          34px
-          minmax(0, 1fr)
-          78px
-          35px;
+        grid-template-columns: 34px minmax(0,1fr) 78px 35px 60px;
       }
 
-      .student-row {
-        padding: 9px 8px;
-      }
-
-      .student-name {
-        font-size: 10px;
-      }
-
-      .absence-control {
-        padding: 5px 6px;
-        font-size: 10px;
-      }
+      .student-row { padding: 9px 8px; }
+      .student-name { font-size: 10px; }
+      .absent-btn { padding: 5px 5px; font-size: 10px; }
     }
   </style>
 </head>
@@ -596,19 +444,12 @@
     </header>
 
     <nav class="progress">
-      <button id="progressSetup" class="progress-item active">
-        1. Setup
-      </button>
-
-      <button id="progressScores" class="progress-item">
-        2. Scores
-      </button>
-
-      <button id="progressReview" class="progress-item">
-        3. Review
-      </button>
+      <button id="progressSetup"  class="progress-item active">1. Setup</button>
+      <button id="progressScores" class="progress-item">2. Scores</button>
+      <button id="progressReview" class="progress-item">3. Review</button>
     </nav>
 
+    <!-- ── Step 1: Setup ── -->
     <section id="stepSetup" class="panel">
       <h2>Tester Setup</h2>
 
@@ -620,48 +461,30 @@
 
         <div class="field">
           <label for="testerName">Tester name</label>
-
-          <input
-            id="testerName"
-            type="text"
-            placeholder="Enter tester name"
-            autocomplete="name"
-          >
+          <input id="testerName" type="text" placeholder="Enter tester name" autocomplete="name">
         </div>
 
         <div class="field">
           <label for="stationSelect">Station</label>
-
-          <select id="stationSelect">
-            <option value="">Select station</option>
-          </select>
+          <select id="stationSelect"></select>
         </div>
 
         <div class="field">
           <label for="levelSelect">Level</label>
-
-          <select
-            id="levelSelect"
-            onchange="updateClassesFromMemory()"
-          >
+          <select id="levelSelect" onchange="updateClassesFromMemory()">
             <option value="">Select level</option>
           </select>
         </div>
 
         <div class="field">
           <label for="classSelect">Class</label>
-
-          <select
-            id="classSelect"
-            onchange="updateGroupsFromMemory()"
-          >
+          <select id="classSelect" onchange="updateGroupsFromMemory()">
             <option value="">Select class</option>
           </select>
         </div>
 
         <div class="field">
           <label for="groupSelect">Group</label>
-
           <select id="groupSelect">
             <option value="">Select group</option>
           </select>
@@ -679,15 +502,11 @@
       <div id="setupMessage" class="message"></div>
 
       <div class="action-row">
-        <button
-          class="btn btn-primary"
-          onclick="loadTesterGroup()"
-        >
-          Load Group
-        </button>
+        <button class="btn btn-primary" onclick="loadTesterGroup()">Load Group</button>
       </div>
     </section>
 
+    <!-- ── Step 2: Scores ── -->
     <section id="stepScores" class="panel hidden">
       <div class="tester-header">
         <div id="testerTitle" class="tester-title"></div>
@@ -695,43 +514,44 @@
 
         <div class="progress-strip">
           <div class="progress-box">
-            <span id="enteredCount" class="progress-number">0</span>
+            <span id="enteredCount" class="progress-number num-green">0</span>
             Entered
           </div>
-
           <div class="progress-box">
-            <span id="absentCount" class="progress-number">0</span>
+            <span id="absentCount" class="progress-number num-grey">0</span>
             Absent
           </div>
-
           <div class="progress-box">
-            <span id="missingCount" class="progress-number">0</span>
+            <span id="missingCount" class="progress-number num-red">0</span>
             Missing
+          </div>
+          <div class="progress-box">
+            <span id="totalCount" class="progress-number">0</span>
+            Total
           </div>
         </div>
       </div>
 
       <div class="information">
-        Enter each score. Select <strong>Absent</strong> only when required. A confirmation will appear before the score field is locked.
+        Enter each score and press <strong>Return</strong> to advance. Tap <strong>Absent</strong> to mark and confirm — tap again to undo.
       </div>
 
       <div id="studentList" class="student-list"></div>
 
       <div class="save-bar">
-        <div id="saveBarMessage" class="save-bar-message">
-          No unsaved changes
+        <div class="save-bar-row">
+          <div class="save-bar-text">
+            <strong id="saveBarHeading">No unsaved changes</strong>
+            <span id="saveBarDetail"></span>
+          </div>
+          <button id="saveResultsButton" class="btn btn-primary" onclick="saveGroupResults()">
+            Save Group Results
+          </button>
         </div>
-
-        <button
-          id="saveResultsButton"
-          class="btn btn-primary"
-          onclick="saveGroupResults()"
-        >
-          Save Group Results
-        </button>
       </div>
     </section>
 
+    <!-- ── Step 3: Review ── -->
     <section id="stepReview" class="panel hidden">
       <h2>Saved Results</h2>
 
@@ -748,32 +568,16 @@
               <th>Status</th>
             </tr>
           </thead>
-
           <tbody id="reviewBody"></tbody>
+          <tfoot id="reviewFoot"></tfoot>
         </table>
       </div>
 
       <div class="action-row">
-        <button
-          class="btn btn-secondary"
-          onclick="returnToScores()"
-        >
-          Edit Scores
-        </button>
-
-        <button
-          class="btn btn-primary"
-          onclick="testNextGroup()"
-        >
-          Test Next Group
-        </button>
-
-        <button
-          class="btn btn-danger"
-          onclick="changeStation()"
-        >
-          Change Station
-        </button>
+        <button class="btn btn-secondary" onclick="returnToScores()">Edit Scores</button>
+        <button class="btn btn-secondary" onclick="copyResultsToClipboard()">Copy to Clipboard</button>
+        <button class="btn btn-primary"   onclick="testNextGroup()">Test Next Group</button>
+        <button class="btn btn-danger"    onclick="changeStation()">Change Station</button>
       </div>
     </section>
   </main>
