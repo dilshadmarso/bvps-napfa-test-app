@@ -1,107 +1,714 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>BVPS NAPFA 5-Station Test</title>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  >
+
+  <title>BVPS NAPFA 5-Station Tester</title>
+
   <style>
+    :root {
+      --navy: #173b73;
+      --navy-dark: #102b56;
+      --blue-light: #eaf1ff;
+
+      --green: #23875d;
+      --green-light: #ddf7ea;
+
+      --red: #c43d4f;
+      --red-light: #ffe7ea;
+
+      --amber: #a56600;
+      --amber-light: #fff3d5;
+
+      --grey-50: #f7f8fb;
+      --grey-100: #eef1f5;
+      --grey-200: #dce1e8;
+      --grey-500: #687386;
+      --grey-800: #263142;
+
+      --shadow: 0 5px 18px rgba(20, 39, 73, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      max-width: 900px;
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--grey-50);
+      color: var(--grey-800);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      touch-action: manipulation;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .page {
+      width: min(100%, 1050px);
       margin: auto;
+      padding: 10px;
     }
 
-    h1 {
-      margin-bottom: 10px;
+    .app-header {
+      margin-bottom: 12px;
+      padding: 18px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--navy), var(--navy-dark));
+      color: white;
+      box-shadow: var(--shadow);
     }
 
-    label {
-      font-weight: bold;
+    .app-header h1 {
+      margin: 0;
+      font-size: 23px;
+    }
+
+    .app-header p {
+      margin: 7px 0 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .progress {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-bottom: 12px;
+    }
+
+    .progress-item {
+      min-height: 45px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--grey-100);
+      color: var(--grey-500);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .progress-item.active {
+      background: var(--navy);
+      color: white;
+    }
+
+    .progress-item.done {
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    .panel {
+      padding: 16px;
+      border-radius: 20px;
+      background: white;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      color: var(--navy);
+      font-size: 21px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .field label {
       display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 47px;
+      padding: 10px 12px;
+      border: 1px solid var(--grey-200);
+      border-radius: 12px;
+      background: white;
+      font-size: 16px;
+    }
+
+    .information,
+    .warning {
+      margin: 12px 0;
+      padding: 12px;
+      border-radius: 12px;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .information {
+      border-left: 5px solid var(--navy);
+      background: var(--blue-light);
+    }
+
+    .warning {
+      border-left: 5px solid #df991c;
+      background: var(--amber-light);
+    }
+
+    .message {
+      min-height: 20px;
+      margin: 12px 0;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
       margin-top: 15px;
     }
 
-    select, input, button {
+    .btn {
+      min-height: 46px;
+      padding: 11px 16px;
+      border: 0;
+      border-radius: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--navy);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: var(--grey-100);
+      color: var(--navy);
+    }
+
+    .btn-danger {
+      background: var(--red-light);
+      color: var(--red);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .tester-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      margin: -16px -16px 14px;
+      padding: 12px 16px;
+      border-radius: 20px 20px 16px 16px;
+      background: rgba(255,255,255,0.97);
+      box-shadow: 0 5px 15px rgba(20,39,73,0.11);
+      backdrop-filter: blur(8px);
+    }
+
+    .tester-title {
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    .tester-subtitle {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--grey-500);
+    }
+
+    .progress-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .progress-box {
       padding: 8px;
-      margin-top: 5px;
-      font-size: 16px;
+      border-radius: 11px;
+      background: var(--grey-50);
+      text-align: center;
+      font-size: 11px;
+    }
+
+    .progress-number {
+      display: block;
+      font-size: 21px;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .student-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+      gap: 10px;
+    }
+
+    .student-card {
+      padding: 12px;
+      border: 2px solid var(--grey-200);
+      border-radius: 18px;
+      background: white;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .student-card.complete {
+      border-color: var(--green);
+      background: var(--green-light);
+    }
+
+    .student-card.edited {
+      border-color: #d89516;
+      background: var(--amber-light);
+    }
+
+    .student-card.failed {
+      border-color: var(--red);
+      background: var(--red-light);
+    }
+
+    .student-top {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .register-number {
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 900;
+      color: var(--navy);
+    }
+
+    .student-name {
+      min-height: 34px;
+      font-size: 12px;
+      line-height: 1.2;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .grade-badge {
+      min-width: 35px;
+      padding: 7px 8px;
+      border-radius: 11px;
+      background: var(--grey-100);
+      text-align: center;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .grade-badge.grade-a,
+    .grade-badge.grade-b,
+    .grade-badge.grade-c {
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    .grade-badge.grade-d,
+    .grade-badge.grade-e {
+      background: var(--amber-light);
+      color: var(--amber);
+    }
+
+    .grade-badge.grade-f {
+      background: var(--red-light);
+      color: var(--red);
+    }
+
+    .score-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 7px;
+      margin-top: 10px;
+      align-items: center;
+    }
+
+    .score-input {
+      width: 100%;
+      min-height: 48px;
+      padding: 8px 10px;
+      border: 2px solid var(--grey-200);
+      border-radius: 12px;
+      background: white;
+      font-size: 22px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .score-input:focus {
+      outline: none;
+      border-color: var(--navy);
+    }
+
+    .unit-label {
+      min-width: 45px;
+      color: var(--grey-500);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .remarks-input {
+      width: 100%;
+      min-height: 38px;
+      margin-top: 8px;
+      padding: 8px 9px;
+      border: 1px solid var(--grey-200);
+      border-radius: 10px;
+      font-size: 13px;
+    }
+
+    .card-status {
+      min-height: 16px;
+      margin-top: 7px;
+      color: var(--grey-500);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .save-bar {
+      position: sticky;
+      bottom: 0;
+      z-index: 90;
+      margin: 15px -16px -16px;
+      padding: 11px 16px;
+      border-radius: 16px 16px 20px 20px;
+      background: rgba(255,255,255,0.98);
+      box-shadow: 0 -5px 16px rgba(20,39,73,0.10);
+    }
+
+    .save-bar-message {
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .save-bar .btn {
+      width: 100%;
+    }
+
+    .review-table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--grey-200);
+      border-radius: 13px;
     }
 
     table {
       width: 100%;
+      min-width: 650px;
       border-collapse: collapse;
-      margin-top: 20px;
+      background: white;
     }
 
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
+    th,
+    td {
+      padding: 10px;
+      border-bottom: 1px solid var(--grey-200);
       text-align: left;
+      font-size: 13px;
     }
 
     th {
-      background: #f2f2f2;
+      background: var(--grey-100);
+      color: var(--navy);
+      white-space: nowrap;
     }
 
-    .score-input {
-      width: 90px;
+    .success-box {
+      margin-top: 14px;
+      padding: 13px;
+      border-radius: 13px;
+      background: var(--green-light);
+      color: var(--green);
+      font-weight: 700;
     }
 
-    .save-btn {
-      padding: 6px 12px;
-      cursor: pointer;
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15,28,48,0.56);
     }
 
-    #status {
-      margin-top: 15px;
-      font-weight: bold;
+    .loading-card {
+      width: min(280px, 100%);
+      padding: 23px;
+      border-radius: 20px;
+      background: white;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+
+    .spinner {
+      width: 42px;
+      height: 42px;
+      margin: 0 auto 13px;
+      border: 5px solid var(--grey-200);
+      border-top-color: var(--navy);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 650px) {
+      .page {
+        padding: 8px;
+      }
+
+      .app-header {
+        padding: 15px;
+      }
+
+      .app-header h1 {
+        font-size: 20px;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .panel {
+        padding: 13px;
+      }
+
+      .tester-header {
+        margin: -13px -13px 12px;
+        padding: 11px 13px;
+      }
+
+      .student-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+      }
+
+      .student-card {
+        padding: 9px;
+        border-radius: 15px;
+      }
+
+      .register-number {
+        font-size: 25px;
+      }
+
+      .student-name {
+        font-size: 10px;
+      }
+
+      .grade-badge {
+        min-width: 31px;
+        padding: 6px;
+        font-size: 16px;
+      }
+
+      .score-input {
+        min-height: 44px;
+        font-size: 20px;
+      }
+
+      .save-bar {
+        margin: 13px -13px -13px;
+        padding: 10px 13px;
+      }
+    }
+
+    @media (max-width: 350px) {
+      .student-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 
 <body>
-  <h1>BVPS NAPFA 5-Station Test</h1>
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <strong id="loadingText">Loading...</strong>
+    </div>
+  </div>
 
-  <label>Tester Name</label>
-  <input type="text" id="testerName" placeholder="Enter tester name">
+  <main class="page">
+    <header class="app-header">
+      <h1>BVPS NAPFA 5-Station Tester</h1>
+      <p>Enter scores quickly and save the whole group together</p>
+    </header>
 
-  <label>Test Date</label>
-  <input type="date" id="testDate">
+    <nav class="progress">
+      <button id="progressSetup" class="progress-item active">1. Setup</button>
+      <button id="progressScores" class="progress-item">2. Scores</button>
+      <button id="progressReview" class="progress-item">3. Review</button>
+    </nav>
 
-  <label>Level</label>
-  <select id="levelSelect" onchange="loadClasses()">
-    <option value="">Select level</option>
-  </select>
+    <section id="stepSetup" class="panel">
+      <h2>Tester Setup</h2>
 
-  <label>Class</label>
-  <select id="classSelect" onchange="loadGroups()">
-    <option value="">Select class</option>
-  </select>
+      <div class="form-grid">
+        <div class="field">
+          <label for="testDate">Test date</label>
+          <input id="testDate" type="date">
+        </div>
 
-  <label>Group</label>
-  <select id="groupSelect" onchange="loadStudents()">
-    <option value="">Select group</option>
-  </select>
+        <div class="field">
+          <label for="testerName">Tester name</label>
+          <input
+            id="testerName"
+            type="text"
+            placeholder="Enter tester name"
+            autocomplete="name"
+          >
+        </div>
 
-  <label>Station</label>
-  <select id="stationSelect">
-    <option value="">Select station</option>
-  </select>
+        <div class="field">
+          <label for="levelSelect">Level</label>
+          <select id="levelSelect" onchange="loadClasses()">
+            <option value="">Select level</option>
+          </select>
+        </div>
 
-  <p id="status"></p>
+        <div class="field">
+          <label for="classSelect">Class</label>
+          <select id="classSelect" onchange="loadGroups()">
+            <option value="">Select class</option>
+          </select>
+        </div>
 
-  <table id="studentsTable" style="display:none;">
-    <thead>
-      <tr>
-        <th>No</th>
-        <th>Name</th>
-        <th>Gender</th>
-        <th>DOB</th>
-        <th>Score</th>
-        <th>Save</th>
-      </tr>
-    </thead>
-    <tbody id="studentsTableBody"></tbody>
-  </table>
+        <div class="field">
+          <label for="groupSelect">Group</label>
+          <select id="groupSelect">
+            <option value="">Select group</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="stationSelect">Station</label>
+          <select id="stationSelect">
+            <option value="">Select station</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="warning">
+        Existing results for the same pupil, date and station will be updated rather than duplicated.
+      </div>
+
+      <div id="setupMessage" class="message"></div>
+
+      <div class="action-row">
+        <button class="btn btn-primary" onclick="loadTesterGroup()">
+          Load Group
+        </button>
+      </div>
+    </section>
+
+    <section id="stepScores" class="panel hidden">
+      <div class="tester-header">
+        <div id="testerTitle" class="tester-title"></div>
+        <div id="testerSubtitle" class="tester-subtitle"></div>
+
+        <div class="progress-strip">
+          <div class="progress-box">
+            <span id="enteredCount" class="progress-number">0</span>
+            Entered
+          </div>
+
+          <div class="progress-box">
+            <span id="missingCount" class="progress-number">0</span>
+            Missing
+          </div>
+
+          <div class="progress-box">
+            <span id="changedCount" class="progress-number">0</span>
+            Changed
+          </div>
+        </div>
+      </div>
+
+      <div class="information">
+        Enter each pupil’s score. Grades update immediately. Existing scores can be corrected before saving.
+      </div>
+
+      <div id="studentGrid" class="student-grid"></div>
+
+      <div class="save-bar">
+        <div id="saveBarMessage" class="save-bar-message">
+          No unsaved changes
+        </div>
+
+        <button
+          id="saveResultsButton"
+          class="btn btn-primary"
+          onclick="saveGroupResults()"
+        >
+          Save Group Results
+        </button>
+      </div>
+    </section>
+
+    <section id="stepReview" class="panel hidden">
+      <h2>Saved Results</h2>
+
+      <div id="reviewMessage" class="success-box"></div>
+
+      <div class="review-table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Name</th>
+              <th>Score</th>
+              <th>Grade</th>
+              <th>Status</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+
+          <tbody id="reviewBody"></tbody>
+        </table>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-secondary" onclick="returnToScores()">
+          Edit Scores
+        </button>
+
+        <button class="btn btn-primary" onclick="startAnotherGroup()">
+          Test Another Group
+        </button>
+      </div>
+    </section>
+  </main>
 
   <script src="station-test.js"></script>
 </body>
