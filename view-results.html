@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  >
+
+  <title>BVPS NAPFA View Results</title>
+
+  <style>
+    :root {
+      --navy: #173b73;
+      --navy-dark: #102b56;
+      --blue-light: #eaf1ff;
+
+      --green: #23875d;
+      --green-light: #ddf7ea;
+
+      --amber: #9a6500;
+      --amber-light: #fff2d4;
+
+      --red: #bd3748;
+      --red-light: #ffe7eb;
+
+      --bronze: #9a5b20;
+      --bronze-light: #f7e2ce;
+
+      --grey-50: #f7f8fb;
+      --grey-100: #eef1f5;
+      --grey-200: #dce1e8;
+      --grey-400: #9aa4b2;
+      --grey-500: #687386;
+      --grey-800: #263142;
+
+      --shadow: 0 5px 18px rgba(20, 39, 73, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--grey-50);
+      color: var(--grey-800);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      touch-action: manipulation;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .page {
+      width: min(100%, 1250px);
+      margin: auto;
+      padding: 10px;
+    }
+
+    .app-header {
+      margin-bottom: 12px;
+      padding: 18px;
+      border-radius: 20px;
+      background: linear-gradient(
+        135deg,
+        var(--navy),
+        var(--navy-dark)
+      );
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    .app-header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .app-header p {
+      margin: 7px 0 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .panel {
+      margin-bottom: 12px;
+      padding: 16px;
+      border-radius: 19px;
+      background: white;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      color: var(--navy);
+      font-size: 21px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 11px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 11px;
+      border: 1px solid var(--grey-200);
+      border-radius: 11px;
+      background: white;
+      font-size: 16px;
+    }
+
+    .btn {
+      min-height: 46px;
+      padding: 11px 15px;
+      border: 0;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--navy);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: var(--grey-100);
+      color: var(--navy);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .message {
+      min-height: 20px;
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .summary-card {
+      padding: 12px;
+      border: 1px solid var(--grey-200);
+      border-radius: 14px;
+      background: var(--grey-50);
+      text-align: center;
+    }
+
+    .summary-number {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--navy);
+      font-size: 27px;
+      font-weight: 900;
+    }
+
+    .summary-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--grey-500);
+    }
+
+    .view-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .view-toggle.active {
+      background: var(--navy);
+      color: white;
+    }
+
+    .filter-input {
+      flex: 1;
+      min-width: 190px;
+      min-height: 44px;
+      padding: 9px 11px;
+      border: 1px solid var(--grey-200);
+      border-radius: 11px;
+      font-size: 15px;
+    }
+
+    .desktop-table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--grey-200);
+      border-radius: 13px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 1120px;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    th,
+    td {
+      padding: 9px;
+      border-bottom: 1px solid var(--grey-200);
+      text-align: left;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--grey-100);
+      color: var(--navy);
+      white-space: nowrap;
+    }
+
+    .station-cell {
+      min-width: 92px;
+    }
+
+    .station-score {
+      display: block;
+      font-weight: 800;
+    }
+
+    .station-grade {
+      display: inline-block;
+      margin-top: 3px;
+      min-width: 27px;
+      padding: 3px 6px;
+      border-radius: 8px;
+      background: var(--grey-100);
+      text-align: center;
+      font-weight: 900;
+    }
+
+    .grade-a,
+    .grade-b,
+    .grade-c {
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    .grade-d,
+    .grade-e {
+      background: var(--amber-light);
+      color: var(--amber);
+    }
+
+    .grade-f {
+      background: var(--red-light);
+      color: var(--red);
+    }
+
+    .grade-missing {
+      background: var(--grey-100);
+      color: var(--grey-500);
+    }
+
+    .award-badge {
+      display: inline-block;
+      padding: 6px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .award-gold {
+      background: #fff0b8;
+      color: #7d5900;
+    }
+
+    .award-silver {
+      background: #e6e9ed;
+      color: #53606d;
+    }
+
+    .award-bronze {
+      background: var(--bronze-light);
+      color: var(--bronze);
+    }
+
+    .award-none {
+      background: var(--red-light);
+      color: var(--red);
+    }
+
+    .missing-text {
+      color: var(--red);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .student-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .student-card {
+      padding: 13px;
+      border: 2px solid var(--grey-200);
+      border-radius: 16px;
+      background: white;
+    }
+
+    .student-card.incomplete {
+      border-color: var(--amber);
+      background: #fffdf7;
+    }
+
+    .student-card-header {
+      display: grid;
+      grid-template-columns: 45px minmax(0, 1fr) auto;
+      gap: 9px;
+      align-items: center;
+    }
+
+    .register-number {
+      font-size: 25px;
+      line-height: 1;
+      font-weight: 900;
+      color: var(--navy);
+      text-align: center;
+    }
+
+    .student-name {
+      font-size: 14px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+
+    .student-meta {
+      margin-top: 3px;
+      color: var(--grey-500);
+      font-size: 11px;
+    }
+
+    .station-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 11px;
+    }
+
+    .station-mini {
+      padding: 8px;
+      border: 1px solid var(--grey-200);
+      border-radius: 11px;
+      background: var(--grey-50);
+      text-align: center;
+    }
+
+    .station-mini-name {
+      min-height: 26px;
+      color: var(--grey-500);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .station-mini-result {
+      margin-top: 3px;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .station-mini-grade {
+      display: inline-block;
+      margin-top: 4px;
+      min-width: 27px;
+      padding: 3px 6px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .student-card-footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 11px;
+      padding-top: 9px;
+      border-top: 1px solid var(--grey-200);
+      align-items: center;
+    }
+
+    .points-text {
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .details-panel {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--grey-200);
+    }
+
+    .detail-row {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr 0.5fr 1.5fr;
+      gap: 7px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--grey-200);
+      align-items: center;
+      font-size: 11px;
+    }
+
+    .detail-row:last-child {
+      border-bottom: 0;
+    }
+
+    .detail-station {
+      font-weight: 800;
+    }
+
+    .detail-improvement {
+      color: var(--navy);
+      font-weight: 700;
+    }
+
+    .empty-state {
+      padding: 24px;
+      border: 1px dashed var(--grey-400);
+      border-radius: 14px;
+      text-align: center;
+      color: var(--grey-500);
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 28, 48, 0.56);
+    }
+
+    .loading-card {
+      width: min(280px, 100%);
+      padding: 22px;
+      border-radius: 19px;
+      background: white;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+
+    .spinner {
+      width: 41px;
+      height: 41px;
+      margin: 0 auto 12px;
+      border: 5px solid var(--grey-200);
+      border-top-color: var(--navy);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 850px) {
+      .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 650px) {
+      .page {
+        padding: 8px;
+      }
+
+      .app-header {
+        padding: 15px;
+      }
+
+      .app-header h1 {
+        font-size: 20px;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .desktop-only {
+        display: none !important;
+      }
+
+      .station-mini-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .detail-row {
+        grid-template-columns: 1fr;
+        gap: 3px;
+      }
+    }
+
+    @media (min-width: 651px) {
+      .mobile-only {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .station-mini-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <strong id="loadingText">Loading...</strong>
+    </div>
+  </div>
+
+  <main class="page">
+    <header class="app-header">
+      <h1>BVPS NAPFA View Results</h1>
+      <p>Scores, grades, points, awards and next-grade targets</p>
+    </header>
+
+    <section class="panel">
+      <h2>Select Results</h2>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="testDateSelect">Test date</label>
+
+          <select id="testDateSelect">
+            <option value="">Select test date</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="levelSelect">Level</label>
+
+          <select
+            id="levelSelect"
+            onchange="updateClasses()"
+          >
+            <option value="">Select level</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="classSelect">Class</label>
+
+          <select id="classSelect">
+            <option value="">Select class</option>
+          </select>
+        </div>
+
+        <button
+          class="btn btn-primary"
+          onclick="loadClassResults()"
+        >
+          View Results
+        </button>
+      </div>
+
+      <div id="setupMessage" class="message"></div>
+    </section>
+
+    <section id="summaryPanel" class="panel hidden">
+      <h2>Class Summary</h2>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <span id="summaryTotal" class="summary-number">0</span>
+          <span class="summary-label">Pupils</span>
+        </div>
+
+        <div class="summary-card">
+          <span id="summaryComplete" class="summary-number">0</span>
+          <span class="summary-label">Complete</span>
+        </div>
+
+        <div class="summary-card">
+          <span id="summaryGold" class="summary-number">0</span>
+          <span class="summary-label">Gold</span>
+        </div>
+
+        <div class="summary-card">
+          <span id="summarySilver" class="summary-number">0</span>
+          <span class="summary-label">Silver</span>
+        </div>
+
+        <div class="summary-card">
+          <span id="summaryBronze" class="summary-number">0</span>
+          <span class="summary-label">Bronze</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="resultsPanel" class="panel hidden">
+      <div class="view-controls">
+        <input
+          id="searchInput"
+          class="filter-input"
+          type="search"
+          placeholder="Search pupil name or number"
+          oninput="applyResultsFilter()"
+        >
+
+        <select
+          id="awardFilter"
+          class="filter-input"
+          onchange="applyResultsFilter()"
+        >
+          <option value="">All awards</option>
+          <option value="Gold">Gold</option>
+          <option value="Silver">Silver</option>
+          <option value="Bronze">Bronze</option>
+          <option value="No Award">No Award</option>
+        </select>
+
+        <button
+          id="tableViewButton"
+          class="btn btn-secondary view-toggle active desktop-only"
+          onclick="setViewMode('table')"
+        >
+          Table View
+        </button>
+
+        <button
+          id="cardViewButton"
+          class="btn btn-secondary view-toggle"
+          onclick="setViewMode('cards')"
+        >
+          Card View
+        </button>
+      </div>
+
+      <div id="tableView" class="desktop-only">
+        <div class="desktop-table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>No.</th>
+                <th>Name</th>
+                <th>Sit-ups</th>
+                <th>Broad Jump</th>
+                <th>Sit & Reach</th>
+                <th>Inclined Pull-up</th>
+                <th>Shuttle Run</th>
+                <th>1.6 km Run</th>
+                <th>Points</th>
+                <th>Award</th>
+                <th>Missing / Incomplete</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+
+            <tbody id="resultsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="cardView" class="student-card-list mobile-only"></div>
+
+      <div id="emptyResults" class="empty-state hidden">
+        No matching results found.
+      </div>
+    </section>
+  </main>
+
+  <script src="view-results.js"></script>
+</body>
+</html>
