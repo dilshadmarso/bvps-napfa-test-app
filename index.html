@@ -1,1 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
 
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  >
+
+  <title>BVPS NAPFA Test App</title>
+
+  <style>
+    :root {
+      --navy: #173b73;
+      --navy-dark: #102b56;
+      --blue-light: #eaf1ff;
+
+      --green: #23875d;
+      --green-light: #ddf7ea;
+
+      --amber: #9a6500;
+      --amber-light: #fff2d4;
+
+      --purple: #6d4db2;
+      --purple-light: #eee8ff;
+
+      --red: #bd3748;
+      --red-light: #ffe7eb;
+
+      --grey-50: #f7f8fb;
+      --grey-100: #eef1f5;
+      --grey-200: #dce1e8;
+      --grey-500: #687386;
+      --grey-800: #263142;
+
+      --shadow: 0 6px 20px rgba(20, 39, 73, 0.10);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--grey-50);
+      color: var(--grey-800);
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .page {
+      width: min(100%, 900px);
+      margin: auto;
+      padding: 12px;
+    }
+
+    .app-header {
+      padding: 22px;
+      border-radius: 22px;
+      background: linear-gradient(
+        135deg,
+        var(--navy),
+        var(--navy-dark)
+      );
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    .app-header h1 {
+      margin: 0;
+      font-size: 27px;
+    }
+
+    .app-header p {
+      margin: 8px 0 0;
+      font-size: 14px;
+      line-height: 1.4;
+      opacity: 0.9;
+    }
+
+    .status-card {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: white;
+      box-shadow: var(--shadow);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--green);
+    }
+
+    .section-title {
+      margin: 22px 2px 10px;
+      color: var(--navy);
+      font-size: 18px;
+    }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .module-card {
+      min-height: 165px;
+      padding: 17px;
+      border: 2px solid transparent;
+      border-radius: 20px;
+      background: white;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition:
+        transform 0.12s ease,
+        border-color 0.12s ease;
+    }
+
+    .module-card:active {
+      transform: scale(0.98);
+    }
+
+    .module-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 25px;
+      font-weight: 900;
+    }
+
+    .module-title {
+      margin-top: 12px;
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    .module-description {
+      margin-top: 6px;
+      color: var(--grey-500);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .module-action {
+      margin-top: 15px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    .admin-card {
+      border-color: var(--amber-light);
+    }
+
+    .admin-card .module-icon {
+      background: var(--amber-light);
+      color: var(--amber);
+    }
+
+    .station-card {
+      border-color: var(--green-light);
+    }
+
+    .station-card .module-icon {
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    .run-card {
+      border-color: var(--blue-light);
+    }
+
+    .run-card .module-icon {
+      background: var(--blue-light);
+      color: var(--navy);
+    }
+
+    .results-card {
+      border-color: var(--purple-light);
+    }
+
+    .results-card .module-icon {
+      background: var(--purple-light);
+      color: var(--purple);
+    }
+
+    .download-card {
+      border-color: var(--red-light);
+    }
+
+    .download-card .module-icon {
+      background: var(--red-light);
+      color: var(--red);
+    }
+
+    .disabled-card {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    .coming-soon {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: var(--grey-100);
+      color: var(--grey-500);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .footer {
+      margin-top: 24px;
+      padding: 14px;
+      text-align: center;
+      color: var(--grey-500);
+      font-size: 11px;
+    }
+
+    @media (max-width: 650px) {
+      .page {
+        padding: 9px;
+      }
+
+      .app-header {
+        padding: 18px;
+      }
+
+      .app-header h1 {
+        font-size: 22px;
+      }
+
+      .module-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .module-card {
+        min-height: 135px;
+        padding: 15px;
+      }
+
+      .module-icon {
+        width: 45px;
+        height: 45px;
+        font-size: 22px;
+      }
+
+      .module-title {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+
+    <header class="app-header">
+      <h1>BVPS NAPFA Test App</h1>
+
+      <p>
+        Manage pupil lists, conduct 5-Station testing,
+        time the 1.6 km run and review NAPFA results.
+      </p>
+    </header>
+
+    <div class="status-card">
+      ● System ready
+    </div>
+
+    <h2 class="section-title">Testing</h2>
+
+    <section class="module-grid">
+
+      <a
+        class="module-card station-card"
+        href="station-test.html"
+      >
+        <div>
+          <div class="module-icon">5</div>
+
+          <div class="module-title">
+            5-Station Tester
+          </div>
+
+          <div class="module-description">
+            Enter scores for Sit-ups, Broad Jump,
+            Sit and Reach, Inclined Pull-up and Shuttle Run.
+          </div>
+        </div>
+
+        <div class="module-action">
+          Open tester →
+        </div>
+      </a>
+
+      <a
+        class="module-card run-card"
+        href="run-timing.html"
+      >
+        <div>
+          <div class="module-icon">⏱</div>
+
+          <div class="module-title">
+            1.6 km Run Timing
+          </div>
+
+          <div class="module-description">
+            Assign pupils to waves, capture finish times
+            and review run results.
+          </div>
+        </div>
+
+        <div class="module-action">
+          Open run timer →
+        </div>
+      </a>
+
+    </section>
+
+    <h2 class="section-title">Results</h2>
+
+    <section class="module-grid">
+
+      <a
+        class="module-card results-card"
+        href="view-results.html"
+      >
+        <div>
+          <div class="module-icon">✓</div>
+
+          <div class="module-title">
+            View Results
+          </div>
+
+          <div class="module-description">
+            View all six station results, grades,
+            total points, awards and next-grade targets.
+          </div>
+        </div>
+
+        <div class="module-action">
+          View class results →
+        </div>
+      </a>
+
+      <div
+        class="module-card download-card disabled-card"
+      >
+        <div>
+          <div class="module-icon">↓</div>
+
+          <div class="module-title">
+            Download for Cockpit
+          </div>
+
+          <div class="module-description">
+            Export results using the official Cockpit
+            upload-ready CSV format.
+          </div>
+
+          <span class="coming-soon">
+            Coming next
+          </span>
+        </div>
+      </div>
+
+    </section>
+
+    <h2 class="section-title">Administration</h2>
+
+    <section class="module-grid">
+
+      <a
+        class="module-card admin-card"
+        href="admin-upload.html"
+      >
+        <div>
+          <div class="module-icon">↑</div>
+
+          <div class="module-title">
+            Admin Upload
+          </div>
+
+          <div class="module-description">
+            Upload or replace official class lists
+            and automatically create five testing groups.
+          </div>
+        </div>
+
+        <div class="module-action">
+          Open admin upload →
+        </div>
+      </a>
+
+    </section>
+
+    <footer class="footer">
+      Bukit View Primary School · NAPFA Test App
+    </footer>
+
+  </main>
+</body>
+</html>
