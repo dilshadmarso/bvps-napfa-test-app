@@ -1821,9 +1821,10 @@ function moveToNextWave() {
 
 /* =====================================================
    COMPLETE SESSION
+   
 ===================================================== */
 
-async function completeSession() {
+function completeSession() {
   if (
     saveInProgress ||
     !waveSaved
@@ -1831,60 +1832,111 @@ async function completeSession() {
     return;
   }
 
-  const button =
-    document.getElementById(
-      'completeBtn'
-    );
-
-  button.disabled =
-    true;
-
-  showLoading(
-    'Completing session…'
-  );
-
-  try {
-    await api({
-      action:
-        'completeRunSession',
-
-      sessionId:
-        sessionId
+  const hasWaveOne =
+    students.some(student => {
+      return (
+        student.assignment ===
+        'Wave 1'
+      );
     });
 
-    markDraftCompleted();
+  const hasWaveTwo =
+    students.some(student => {
+      return (
+        student.assignment ===
+        'Wave 2'
+      );
+    });
 
-    const notRunning =
-      students.filter(student => {
-        return (
-          student.assignment ===
-          'Not Running'
-        );
-      }).length;
-
-    setText(
-      'completionSummary',
-      `${selectedClass} completed. ` +
-      `Wave 1: ${waveOneResults.length} · ` +
-      `Wave 2: ${waveTwoResults.length} · ` +
-      `Not Running: ${notRunning} · ` +
-      `Total: ${students.length}`
-    );
-
-    showPanel(
-      'completionPanel'
-    );
-
-  } catch (error) {
+  if (
+    hasWaveOne &&
+    waveOneResults.length === 0
+  ) {
     alert(
-      'Unable to complete session: ' +
-      error.message
+      'Wave 1 has not been saved to Google Sheets.'
     );
 
-  } finally {
-    hideLoading();
-    button.disabled = false;
+    return;
   }
+
+  if (
+    hasWaveTwo &&
+    waveTwoResults.length === 0
+  ) {
+    alert(
+      'Wave 2 has not been saved to Google Sheets.'
+    );
+
+    return;
+  }
+
+  if (
+    !sessionSetupSynced
+  ) {
+    alert(
+      'The session setup has not finished syncing. Press Retry Sync before completing the session.'
+    );
+
+    setRetrySetupSyncVisible(
+      true
+    );
+
+    return;
+  }
+
+  const confirmed =
+    confirm(
+      'Complete this run session?\n\n' +
+      'All wave results have already been saved to Google Sheets.'
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  /*
+   * No Apps Script request here.
+   * The wave results are already stored.
+   */
+  markDraftCompleted();
+
+  const notRunning =
+    students.filter(student => {
+      return (
+        student.assignment ===
+        'Not Running'
+      );
+    }).length;
+
+  const totalRecorded =
+    waveOneResults.length +
+    waveTwoResults.length +
+    notRunning;
+
+  setText(
+    'completionSummary',
+    `${selectedClass} run completed.\n` +
+    `Wave 1 saved: ${waveOneResults.length} pupil(s)\n` +
+    `Wave 2 saved: ${waveTwoResults.length} pupil(s)\n` +
+    `Not Running: ${notRunning} pupil(s)\n` +
+    `Total recorded: ${totalRecorded} of ${students.length}`
+  );
+
+  updateSaveStatus(
+    'Session completed',
+    'saved'
+  );
+
+  vibrate(100);
+
+  playTone(
+    880,
+    0.12
+  );
+
+  showPanel(
+    'completionPanel'
+  );
 }
 
 
