@@ -1,4 +1,4 @@
-const GOOGLE_APPS_SCRIPT_URL='const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec";';
+const GOOGLE_APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec';
 const STATIONS=['Sit-ups','Standing Broad Jump','Sit and Reach','Inclined Pull-up','Shuttle Run','1.6km Run'];
 const SHORT={'Sit-ups':'Sit-ups','Standing Broad Jump':'Broad Jump','Sit and Reach':'Sit & Reach','Inclined Pull-up':'Inclined Pull-up','Shuttle Run':'Shuttle Run','1.6km Run':'1.6 km Run'};
 let setup={levels:[],classesByLevel:{},testDates:[]},all=[],filtered=[],view=innerWidth<=650?'cards':'table';
