@@ -40,7 +40,27 @@
   </section>
 
   <section id="timingPanel" class="panel hidden">
-    <div class="context"><span id="sessionText"></span><span id="saveStatus" class="status">Saved on device</span></div>
+<div class="context">
+  <span id="sessionText"></span>
+
+  <div class="sync-controls">
+    <span
+      id="saveStatus"
+      class="status"
+    >
+      Saved on device
+    </span>
+
+    <button
+      id="retrySetupSyncBtn"
+      class="sync-retry hidden"
+      type="button"
+      onclick="retrySessionSetupSync()"
+    >
+      Retry Sync
+    </button>
+  </div>
+</div>
     <div class="timer-wrap"><div class="timer"><div>Current time</div><div id="timerValue" class="timer-value">00:00.0</div></div></div>
     <div class="info">Tap a pupil once at the finish line. Times are stored immediately on this device. Runner positions never move.</div>
     <div id="finishedCount" class="count"></div>
