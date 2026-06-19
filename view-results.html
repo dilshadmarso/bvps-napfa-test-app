@@ -1,19 +1,772 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#173b73"><title>BVPS View Results</title>
-<style>
-:root{--navy:#173b73;--navy2:#102b56;--green:#23875d;--greenBg:#ddf7ea;--amber:#956000;--amberBg:#fff1cf;--red:#bd3748;--redBg:#ffe7eb;--bg:#f5f7fb;--card:#fff;--line:#dce1e8;--muted:#687386;--text:#263142;--shadow:0 6px 20px rgba(20,39,73,.10)}*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}button,input,select{font:inherit}.hidden{display:none!important}.page{max-width:1250px;margin:auto;padding:10px;padding-bottom:calc(20px + env(safe-area-inset-bottom))}.topbar{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;margin-bottom:10px}.navbtn,.btn{border:0;border-radius:12px;min-height:46px;padding:10px 14px;font-weight:800;cursor:pointer}.navbtn{background:#fff;color:var(--navy);box-shadow:var(--shadow)}.title{text-align:center;font-weight:900;color:var(--navy)}.hero{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:18px;border-radius:20px;box-shadow:var(--shadow);margin-bottom:12px}.hero h1{margin:0;font-size:24px}.hero p{margin:6px 0 0;font-size:13px;opacity:.9}.panel{background:#fff;padding:15px;border-radius:18px;box-shadow:var(--shadow);margin-bottom:12px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}.field label{display:block;font-size:13px;font-weight:800;margin-bottom:5px}.field select,.search{width:100%;min-height:46px;border:1px solid var(--line);border-radius:11px;padding:10px;background:#fff;font-size:16px}.btn-primary{background:var(--navy);color:#fff}.btn-secondary{background:#eef1f5;color:var(--navy)}.summary{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}.sum{background:var(--bg);border-radius:13px;padding:10px;text-align:center}.sum strong{display:block;color:var(--navy);font-size:24px}.sum span{font-size:10px;font-weight:800;color:var(--muted)}.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.controls .search{flex:1;min-width:200px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}table{width:100%;min-width:1150px;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid var(--line);font-size:12px;text-align:left;vertical-align:middle}th{background:#eef1f5;color:var(--navy);position:sticky;top:0}.score{font-weight:900}.grade,.award{display:inline-block;border-radius:999px;padding:4px 8px;font-weight:900;font-size:11px}.gA,.gB,.gC{background:var(--greenBg);color:var(--green)}.gD,.gE{background:var(--amberBg);color:var(--amber)}.gF,.missing{background:var(--redBg);color:var(--red)}.gold{background:#fff0b8;color:#7d5900}.silver{background:#e6e9ed;color:#53606d}.bronze{background:#f7e2ce;color:#9a5b20}.none{background:var(--redBg);color:var(--red)}.cards{display:flex;flex-direction:column;gap:10px}.card{border:2px solid var(--line);border-radius:17px;padding:13px}.card.incomplete{border-color:var(--amber)}.cardhead{display:grid;grid-template-columns:48px 1fr auto;gap:8px;align-items:center}.reg{font-size:25px;font-weight:900;color:var(--navy);text-align:center}.name{font-weight:900}.meta{font-size:11px;color:var(--muted);margin-top:3px}.station-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}.station{background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:8px;text-align:center}.station small{display:block;min-height:25px;color:var(--muted);font-weight:800}.station b{display:block;margin:3px 0}.details{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}.detailrow{display:grid;grid-template-columns:1.2fr .8fr .5fr 1.5fr;gap:7px;padding:7px 0;border-bottom:1px solid var(--line);font-size:11px}.message{min-height:18px;font-weight:800;font-size:13px;margin-top:8px}.overlay{position:fixed;inset:0;background:rgba(15,28,48,.58);display:flex;align-items:center;justify-content:center;z-index:9999}.loadcard{background:#fff;border-radius:18px;padding:22px;text-align:center;min-width:250px}.spinner{width:42px;height:42px;border:5px solid var(--line);border-top-color:var(--navy);border-radius:50%;margin:0 auto 12px;animation:spin .75s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:900px){.grid4{grid-template-columns:repeat(2,1fr)}.summary{grid-template-columns:repeat(4,1fr)}}@media(max-width:650px){.grid4{grid-template-columns:1fr}.summary{grid-template-columns:repeat(2,1fr)}.desktop{display:none!important}.station-grid{grid-template-columns:repeat(3,1fr)}}@media(min-width:651px){.mobile{display:none!important}}@media(max-width:390px){.station-grid{grid-template-columns:repeat(2,1fr)}.detailrow{grid-template-columns:1fr}.navbtn{padding:8px 9px;font-size:12px}.title{font-size:12px}}
-</style>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta
+    name="theme-color"
+    content="#173b73"
+  >
+
+  <title>BVPS View Results</title>
+
+  <style>
+    :root {
+      --navy: #173b73;
+      --navy-dark: #102b56;
+
+      --green: #23875d;
+      --green-bg: #ddf7ea;
+
+      --amber: #956000;
+      --amber-bg: #fff1cf;
+
+      --red: #bd3748;
+      --red-bg: #ffe7eb;
+
+      --background: #f5f7fb;
+      --card: #ffffff;
+      --line: #dce1e8;
+      --muted: #687386;
+      --text: #263142;
+
+      --shadow:
+        0 6px 20px rgba(20, 39, 73, 0.10);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      touch-action: manipulation;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .page {
+      width: min(100%, 1250px);
+      margin: auto;
+      padding: 10px;
+      padding-bottom:
+        calc(20px + env(safe-area-inset-bottom));
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns:
+        auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .nav-button,
+    .button {
+      min-height: 46px;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .nav-button {
+      background: white;
+      color: var(--navy);
+      box-shadow: var(--shadow);
+    }
+
+    .page-title {
+      color: var(--navy);
+      text-align: center;
+      font-weight: 900;
+    }
+
+    .hero {
+      margin-bottom: 12px;
+      padding: 18px;
+      border-radius: 20px;
+      background: linear-gradient(
+        135deg,
+        var(--navy),
+        var(--navy-dark)
+      );
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .hero p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .panel {
+      margin-bottom: 12px;
+      padding: 15px;
+      border-radius: 18px;
+      background: white;
+      box-shadow: var(--shadow);
+    }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .field select,
+    .search-input {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: white;
+      font-size: 16px;
+    }
+
+    .button-primary {
+      background: var(--navy);
+      color: white;
+    }
+
+    .button-secondary {
+      background: #eef1f5;
+      color: var(--navy);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .date-information {
+      margin-top: 11px;
+      padding: 10px;
+      border-left: 5px solid var(--navy);
+      border-radius: 10px;
+      background: #eaf1ff;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .message {
+      min-height: 18px;
+      margin-top: 8px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(7, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .summary-card {
+      padding: 10px;
+      border-radius: 13px;
+      background: var(--background);
+      text-align: center;
+    }
+
+    .summary-card strong {
+      display: block;
+      color: var(--navy);
+      font-size: 24px;
+    }
+
+    .summary-card span {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .controls .search-input {
+      flex: 1;
+      min-width: 190px;
+    }
+
+    .table-wrapper {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 1150px;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 9px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+      font-size: 12px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #eef1f5;
+      color: var(--navy);
+    }
+
+    .score {
+      font-weight: 900;
+    }
+
+    .grade,
+    .award {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .grade-a,
+    .grade-b,
+    .grade-c {
+      background: var(--green-bg);
+      color: var(--green);
+    }
+
+    .grade-d,
+    .grade-e {
+      background: var(--amber-bg);
+      color: var(--amber);
+    }
+
+    .grade-f,
+    .missing {
+      background: var(--red-bg);
+      color: var(--red);
+    }
+
+    .award-gold {
+      background: #fff0b8;
+      color: #7d5900;
+    }
+
+    .award-silver {
+      background: #e6e9ed;
+      color: #53606d;
+    }
+
+    .award-bronze {
+      background: #f7e2ce;
+      color: #9a5b20;
+    }
+
+    .award-none {
+      background: var(--red-bg);
+      color: var(--red);
+    }
+
+    .cards {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .pupil-card {
+      padding: 13px;
+      border: 2px solid var(--line);
+      border-radius: 17px;
+      background: white;
+    }
+
+    .pupil-card.incomplete {
+      border-color: var(--amber);
+    }
+
+    .card-header {
+      display: grid;
+      grid-template-columns:
+        48px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .register-number {
+      color: var(--navy);
+      font-size: 25px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .pupil-name {
+      font-weight: 900;
+    }
+
+    .pupil-meta {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .station-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .station-card {
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--background);
+      text-align: center;
+    }
+
+    .station-card small {
+      display: block;
+      min-height: 25px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .station-card b {
+      display: block;
+      margin: 3px 0;
+    }
+
+    .details {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-row {
+      display: grid;
+      grid-template-columns:
+        1.2fr 0.8fr 0.5fr 1.5fr;
+      gap: 7px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 28, 48, 0.58);
+    }
+
+    .loading-card {
+      min-width: 250px;
+      padding: 22px;
+      border-radius: 18px;
+      background: white;
+      text-align: center;
+    }
+
+    .spinner {
+      width: 42px;
+      height: 42px;
+      margin: 0 auto 12px;
+      border: 5px solid var(--line);
+      border-top-color: var(--navy);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 1000px) {
+      .filter-grid {
+        grid-template-columns:
+          repeat(2, minmax(0, 1fr));
+      }
+
+      .summary-grid {
+        grid-template-columns:
+          repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 650px) {
+      .filter-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-grid {
+        grid-template-columns:
+          repeat(2, minmax(0, 1fr));
+      }
+
+      .desktop-only {
+        display: none !important;
+      }
+
+      .station-grid {
+        grid-template-columns:
+          repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (min-width: 651px) {
+      .mobile-only {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .station-grid {
+        grid-template-columns:
+          repeat(2, minmax(0, 1fr));
+      }
+
+      .detail-row {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-button {
+        padding: 8px 9px;
+        font-size: 12px;
+      }
+
+      .page-title {
+        font-size: 12px;
+      }
+    }
+  </style>
 </head>
+
 <body>
-<div id="loading" class="overlay hidden"><div class="loadcard"><div class="spinner"></div><strong id="loadingText">Loading…</strong></div></div>
-<main class="page">
-<nav class="topbar"><button class="navbtn" onclick="location.href='index.html'">← Home</button><div class="title">View Results</div><button class="navbtn" onclick="history.length>1?history.back():location.href='index.html'">Back</button></nav>
-<header class="hero"><h1>BVPS NAPFA Results</h1><p>Raw scores, grades, points, awards and next-grade targets.</p></header>
-<section class="panel"><div class="grid4"><div class="field"><label>Date</label><select id="date"><option value="">Select date</option></select></div><div class="field"><label>Level</label><select id="level" onchange="updateClasses()"><option value="">Select level</option></select></div><div class="field"><label>Class</label><select id="class"><option value="">Select class</option></select></div><button class="btn btn-primary" onclick="loadResults()">View Results</button></div><div id="message" class="message"></div></section>
-<section id="summaryPanel" class="panel hidden"><div class="summary"><div class="sum"><strong id="sTotal">0</strong><span>Pupils</span></div><div class="sum"><strong id="sComplete">0</strong><span>Complete</span></div><div class="sum"><strong id="sIncomplete">0</strong><span>Incomplete</span></div><div class="sum"><strong id="sGold">0</strong><span>Gold</span></div><div class="sum"><strong id="sSilver">0</strong><span>Silver</span></div><div class="sum"><strong id="sBronze">0</strong><span>Bronze</span></div><div class="sum"><strong id="sNone">0</strong><span>No Award</span></div></div></section>
-<section id="resultsPanel" class="panel hidden"><div class="controls"><input id="search" class="search" placeholder="Search pupil" oninput="filterResults()"><select id="awardFilter" class="search" onchange="filterResults()"><option value="">All awards</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>No Award</option></select><button class="btn btn-secondary" onclick="loadResults()">Refresh Results</button><button class="btn btn-secondary desktop" onclick="setView('table')">Table</button><button class="btn btn-secondary" onclick="setView('cards')">Cards</button></div><div id="tableView" class="desktop table-wrap"><table><thead><tr><th>No.</th><th>Name</th><th>Sit-ups</th><th>Broad Jump</th><th>Sit & Reach</th><th>Inclined Pull-up</th><th>Shuttle Run</th><th>1.6 km Run</th><th>Points</th><th>Award</th><th>Status</th><th>Details</th></tr></thead><tbody id="tbody"></tbody></table></div><div id="cardView" class="mobile cards"></div><div id="empty" class="message hidden">No matching pupils.</div></section>
-</main><script src="view-results.js"></script>
-</body></html>
+  <div
+    id="loadingOverlay"
+    class="loading-overlay hidden"
+  >
+    <div class="loading-card">
+      <div class="spinner"></div>
+
+      <strong id="loadingText">
+        Loading…
+      </strong>
+    </div>
+  </div>
+
+  <main class="page">
+    <nav class="topbar">
+      <button
+        class="nav-button"
+        type="button"
+        onclick="location.href='index.html'"
+      >
+        ← Home
+      </button>
+
+      <div class="page-title">
+        View Results
+      </div>
+
+      <button
+        class="nav-button"
+        type="button"
+        onclick="goBack()"
+      >
+        Back
+      </button>
+    </nav>
+
+    <header class="hero">
+      <h1>BVPS NAPFA Results</h1>
+
+      <p>
+        Combine the five station results and 1.6 km Run
+        even when they were conducted on different dates.
+      </p>
+    </header>
+
+    <section class="panel">
+      <div class="filter-grid">
+        <div class="field">
+          <label for="levelSelect">
+            Level
+          </label>
+
+          <select
+            id="levelSelect"
+            onchange="updateClasses()"
+          >
+            <option value="">
+              Select level
+            </option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="classSelect">
+            Class
+          </label>
+
+          <select
+            id="classSelect"
+            onchange="updateResultDates()"
+          >
+            <option value="">
+              Select class
+            </option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="stationDateSelect">
+            5-Station date
+          </label>
+
+          <select id="stationDateSelect">
+            <option value="">
+              Select 5-Station date
+            </option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="runDateSelect">
+            1.6 km Run date
+          </label>
+
+          <select id="runDateSelect">
+            <option value="">
+              Select run date
+            </option>
+          </select>
+        </div>
+
+        <button
+          id="viewResultsButton"
+          class="button button-primary"
+          type="button"
+          onclick="loadResults()"
+        >
+          View Combined Results
+        </button>
+      </div>
+
+      <div class="date-information">
+        The five station date and run date may be different.
+        The app will combine both sets of results into one
+        NAPFA result.
+      </div>
+
+      <div
+        id="message"
+        class="message"
+      ></div>
+    </section>
+
+    <section
+      id="summaryPanel"
+      class="panel hidden"
+    >
+      <div class="summary-grid">
+        <div class="summary-card">
+          <strong id="summaryTotal">0</strong>
+          <span>Pupils</span>
+        </div>
+
+        <div class="summary-card">
+          <strong id="summaryComplete">0</strong>
+          <span>Complete</span>
+        </div>
+
+        <div class="summary-card">
+          <strong id="summaryIncomplete">0</strong>
+          <span>Incomplete</span>
+        </div>
+
+        <div class="summary-card">
+          <strong id="summaryGold">0</strong>
+          <span>Gold</span>
+        </div>
+
+        <div class="summary-card">
+          <strong id="summarySilver">0</strong>
+          <span>Silver</span>
+        </div>
+
+        <div class="summary-card">
+          <strong id="summaryBronze">0</strong>
+          <span>Bronze</span>
+        </div>
+
+        <div class="summary-card">
+          <strong id="summaryNone">0</strong>
+          <span>No Award</span>
+        </div>
+      </div>
+
+      <div
+        id="selectedDatesMessage"
+        class="date-information"
+      ></div>
+    </section>
+
+    <section
+      id="resultsPanel"
+      class="panel hidden"
+    >
+      <div class="controls">
+        <input
+          id="searchInput"
+          class="search-input"
+          type="search"
+          placeholder="Search pupil"
+          oninput="filterResults()"
+        >
+
+        <select
+          id="awardFilter"
+          class="search-input"
+          onchange="filterResults()"
+        >
+          <option value="">
+            All awards
+          </option>
+
+          <option value="Gold">
+            Gold
+          </option>
+
+          <option value="Silver">
+            Silver
+          </option>
+
+          <option value="Bronze">
+            Bronze
+          </option>
+
+          <option value="No Award">
+            No Award
+          </option>
+        </select>
+
+        <button
+          class="button button-secondary"
+          type="button"
+          onclick="loadResults()"
+        >
+          Refresh Results
+        </button>
+
+        <button
+          class="button button-secondary desktop-only"
+          type="button"
+          onclick="setViewMode('table')"
+        >
+          Table
+        </button>
+
+        <button
+          class="button button-secondary"
+          type="button"
+          onclick="setViewMode('cards')"
+        >
+          Cards
+        </button>
+      </div>
+
+      <div
+        id="tableView"
+        class="desktop-only table-wrapper"
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Name</th>
+              <th>Sit-ups</th>
+              <th>Broad Jump</th>
+              <th>Sit & Reach</th>
+              <th>Inclined Pull-up</th>
+              <th>Shuttle Run</th>
+              <th>1.6 km Run</th>
+              <th>Points</th>
+              <th>Award</th>
+              <th>Status</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+
+          <tbody id="resultsTableBody"></tbody>
+        </table>
+      </div>
+
+      <div
+        id="cardView"
+        class="mobile-only cards"
+      ></div>
+
+      <div
+        id="emptyResults"
+        class="message hidden"
+      >
+        No matching pupils.
+      </div>
+    </section>
+  </main>
+
+  <script src="view-results.js"></script>
+</body>
+</html>
