@@ -1,4 +1,4 @@
-const GOOGLE_APPS_SCRIPT_URL = 'const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec";';
+const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec';
 const RUN_DRAFT_KEY = 'BVPS_NAPFA_RUN_DRAFT_V4';
 const SETTINGS_KEY = 'BVPS_NAPFA_SETTINGS_V1';
 const COMPLETED_BACKUP_MS = 24 * 60 * 60 * 1000;
