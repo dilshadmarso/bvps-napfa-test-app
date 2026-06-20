@@ -1,239 +1,803 @@
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec";
+  'https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec';
 
-const els = {};
+const STATIONS = [
+  'Sit-ups',
+  'Standing Broad Jump',
+  'Sit and Reach',
+  'Inclined Pull-up',
+  'Shuttle Run',
+  '1.6km Run'
+];
 
-document.addEventListener("DOMContentLoaded", () => {
-  els.level = document.getElementById("levelSelect");
-  els.className = document.getElementById("classSelect");
-  els.loadBtn = document.getElementById("loadResultsBtn");
-  els.status = document.getElementById("statusBox");
-  els.summary = document.getElementById("summaryBox");
-  els.tableWrap = document.getElementById("resultsTableWrap");
-  els.resultsBody = document.getElementById("resultsBody");
+const SHORT_STATION_NAMES = {
+  'Sit-ups': 'Sit-ups',
+  'Standing Broad Jump': 'Broad Jump',
+  'Sit and Reach': 'Sit & Reach',
+  'Inclined Pull-up': 'Inclined Pull-up',
+  'Shuttle Run': 'Shuttle Run',
+  '1.6km Run': '1.6 km Run'
+};
 
-  els.level.addEventListener("change", handleLevelChange);
-  els.loadBtn.addEventListener("click", loadResults);
+let allStudents = [];
+let filteredStudents = [];
 
-  loadLevels();
-});
+document.addEventListener('DOMContentLoaded', initialisePage);
 
-function setStatus(message, type = "info") {
-  els.status.textContent = message;
-  els.status.className = `status ${type}`;
+async function initialisePage() {
+  await loadLevels();
 }
 
-function setLoading(isLoading) {
-  els.loadBtn.disabled = isLoading;
-  els.level.disabled = isLoading;
-  els.className.disabled = isLoading || !els.level.value;
-  els.loadBtn.textContent = isLoading ? "Loading..." : "View Results";
-}
-
-async function fetchApi(action, params = {}) {
+async function apiGet(action, params = {}) {
   const url = new URL(API_URL);
-  url.searchParams.set("action", action);
+
+  url.searchParams.set('action', action);
+  url.searchParams.set('_', Date.now());
 
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ''
+    ) {
       url.searchParams.set(key, value);
     }
   });
 
-  const response = await fetch(url.toString(), { method: "GET" });
-  const text = await response.text();
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    cache: 'no-store'
+  });
 
+  const text = await response.text();
   let data;
 
   try {
     data = JSON.parse(text);
-  } catch (err) {
-    throw new Error(`Backend did not return JSON. Response: ${text.slice(0, 150)}`);
+  } catch (error) {
+    throw new Error(
+      'Backend did not return JSON: ' +
+      text.slice(0, 150)
+    );
   }
 
-  if (!response.ok || data.success === false) {
-    throw new Error(data.message || `Request failed: ${response.status}`);
+  if (data && data.success === false) {
+    throw new Error(
+      data.message ||
+      data.error ||
+      'Backend request failed.'
+    );
   }
 
   return data;
 }
 
 async function loadLevels() {
+  const levelSelect =
+    document.getElementById('levelSelect');
+
+  const classSelect =
+    document.getElementById('classSelect');
+
+  levelSelect.innerHTML =
+    '<option value="">Loading levels...</option>';
+
+  classSelect.innerHTML =
+    '<option value="">Select class</option>';
+
+  setMessage('');
+  showLoading('Loading levels…');
+
   try {
-    setStatus("Loading levels...");
-    setLoading(true);
+    const data =
+      await apiGet('getViewLevels');
 
-    const data = await fetchApi("getViewLevels");
-    const levels = Array.isArray(data) ? data : data.levels;
+    const levels = Array.isArray(data)
+      ? data
+      : Array.isArray(data.levels)
+        ? data.levels
+        : [];
 
-    els.level.innerHTML = `<option value="">Select level</option>`;
+    levelSelect.innerHTML =
+      '<option value="">Select level</option>';
 
     levels.forEach(level => {
-      const option = document.createElement("option");
-      option.value = level;
-      option.textContent = level;
-      els.level.appendChild(option);
+      levelSelect.add(
+        new Option(level, level)
+      );
     });
 
-    els.className.innerHTML = `<option value="">Select class</option>`;
-    els.className.disabled = true;
+    if (!levels.length) {
+      throw new Error(
+        'No levels were found in Student_Master.'
+      );
+    }
 
-    setStatus(
-      levels.length ? "Select a level and class." : "No levels found in Student_Master.",
-      levels.length ? "info" : "warn"
+    setMessage(
+      'Select a level and class.',
+      'success'
     );
-  } catch (err) {
-    console.error(err);
-    setStatus(`Unable to load levels: ${err.message}`, "error");
+  } catch (error) {
+    levelSelect.innerHTML =
+      '<option value="">Select level</option>';
+
+    setMessage(
+      'Unable to load levels: ' +
+      error.message,
+      'error'
+    );
   } finally {
-    setLoading(false);
+    hideLoading();
   }
 }
 
-async function handleLevelChange() {
-  const level = els.level.value;
-  clearResults();
+async function loadClasses() {
+  const level =
+    document.getElementById('levelSelect').value;
 
-  els.className.innerHTML = `<option value="">Select class</option>`;
-  els.className.disabled = true;
+  const classSelect =
+    document.getElementById('classSelect');
+
+  classSelect.innerHTML =
+    '<option value="">Select class</option>';
+
+  hideResults();
 
   if (!level) {
-    setStatus("Select a level.");
+    setMessage('Select a level.');
     return;
   }
 
+  classSelect.innerHTML =
+    '<option value="">Loading classes...</option>';
+
+  setMessage('');
+  showLoading('Loading classes…');
+
   try {
-    setStatus("Loading classes...");
-    setLoading(true);
+    const data =
+      await apiGet(
+        'getViewClasses',
+        { level }
+      );
 
-    const data = await fetchApi("getViewClasses", { level });
-    const classes = Array.isArray(data) ? data : data.classes;
+    const classes = Array.isArray(data)
+      ? data
+      : Array.isArray(data.classes)
+        ? data.classes
+        : [];
 
-    els.className.innerHTML = `<option value="">Select class</option>`;
+    classSelect.innerHTML =
+      '<option value="">Select class</option>';
 
     classes.forEach(className => {
-      const option = document.createElement("option");
-      option.value = className;
-      option.textContent = className;
-      els.className.appendChild(option);
+      classSelect.add(
+        new Option(className, className)
+      );
     });
 
-    els.className.disabled = false;
+    if (!classes.length) {
+      throw new Error(
+        'No classes were found for ' +
+        level +
+        '.'
+      );
+    }
 
-    setStatus(
-      classes.length
-        ? "Select a class, then tap View Results."
-        : "No classes found for this level.",
-      classes.length ? "info" : "warn"
+    setMessage(
+      `${classes.length} class(es) loaded.`,
+      'success'
     );
-  } catch (err) {
-    console.error(err);
-    setStatus(`Unable to load classes: ${err.message}`, "error");
+  } catch (error) {
+    classSelect.innerHTML =
+      '<option value="">Select class</option>';
+
+    setMessage(
+      'Unable to load classes: ' +
+      error.message,
+      'error'
+    );
   } finally {
-    setLoading(false);
+    hideLoading();
   }
 }
 
 async function loadResults() {
-  const level = els.level.value;
-  const className = els.className.value;
+  const level =
+    document.getElementById('levelSelect').value;
+
+  const className =
+    document.getElementById('classSelect').value;
 
   if (!level || !className) {
-    setStatus("Please select both level and class.", "warn");
+    setMessage(
+      'Select both level and class.',
+      'error'
+    );
+
     return;
-  }
+      }
+
+  const button =
+    document.getElementById('viewResultsButton');
+
+  button.disabled = true;
+
+  setMessage('');
+  showLoading('Loading results…');
 
   try {
-    setStatus("Loading results...");
-    setLoading(true);
-    clearResults();
+    const data =
+      await apiGet(
+        'getViewResults',
+        {
+          level,
+          className
+        }
+      );
 
-    const data = await fetchApi("getViewResults", { level, className });
-    const students = data.students || [];
+    allStudents =
+      Array.isArray(data.students)
+        ? data.students
+        : [];
 
-    renderSummary(data.summary || {}, students.length);
-    renderResults(students);
+    filteredStudents = [
+      ...allStudents
+    ];
 
-    setStatus(
-      students.length
-        ? `Loaded ${students.length} student result(s).`
-        : "No saved results found for this class yet.",
-      students.length ? "success" : "warn"
+    document
+      .getElementById('summaryPanel')
+      .classList.remove('hidden');
+
+    document
+      .getElementById('resultsPanel')
+      .classList.remove('hidden');
+
+    document.getElementById(
+      'searchInput'
+    ).value = '';
+
+    document.getElementById(
+      'awardFilter'
+    ).value = '';
+
+    renderSummary(
+      data.summary || {}
     );
-  } catch (err) {
-    console.error(err);
-    setStatus(`Unable to load results: ${err.message}`, "error");
+
+    renderResults();
+
+    setMessage(
+      `${allStudents.length} pupil(s) loaded for ${className}.`,
+      'success'
+    );
+  } catch (error) {
+    hideResults();
+
+    setMessage(
+      'Unable to load results: ' +
+      error.message,
+      'error'
+    );
   } finally {
-    setLoading(false);
+    hideLoading();
+    button.disabled = false;
   }
 }
 
-function clearResults() {
-  els.summary.innerHTML = "";
-  els.resultsBody.innerHTML = "";
-  els.tableWrap.style.display = "none";
+function renderSummary(
+  backendSummary = {}
+) {
+  const completeCount =
+    allStudents.filter(
+      isStudentComplete
+    ).length;
+
+  const incompleteCount =
+    allStudents.length -
+    completeCount;
+
+  setText(
+    'summaryTotal',
+    allStudents.length
+  );
+
+  setText(
+    'summaryComplete',
+    completeCount
+  );
+
+  setText(
+    'summaryIncomplete',
+    incompleteCount
+  );
+
+  setText(
+    'summaryGold',
+    backendSummary.Gold ??
+    countAward('Gold')
+  );
+
+  setText(
+    'summarySilver',
+    backendSummary.Silver ??
+    countAward('Silver')
+  );
+
+  setText(
+    'summaryBronze',
+    backendSummary.Bronze ??
+    countAward('Bronze')
+  );
+
+  setText(
+    'summaryNoAward',
+    backendSummary['No Award'] ??
+    countAward('No Award')
+  );
 }
 
-function renderSummary(summary, studentCount) {
-  const cards = [
-    ["Students", studentCount],
-    ["Gold", summary.Gold || 0],
-    ["Silver", summary.Silver || 0],
-    ["Bronze", summary.Bronze || 0],
-    ["No Award", summary["No Award"] || 0],
-    ["Incomplete", summary.Incomplete || 0]
-  ];
-
-  els.summary.innerHTML = cards.map(([label, value]) => `
-    <div class="summary-card">
-      <div class="summary-value">${escapeHtml(value)}</div>
-      <div class="summary-label">${escapeHtml(label)}</div>
-    </div>
-  `).join("");
+function countAward(award) {
+  return allStudents.filter(student => {
+    return (
+      normaliseAward(student.award) ===
+      award
+    );
+  }).length;
 }
 
-function renderResults(students) {
-  els.resultsBody.innerHTML = students.map(student => `
-    <tr>
-      <td>${escapeHtml(student.no)}</td>
-      <td class="name-cell">${escapeHtml(student.name)}</td>
-      <td>${escapeHtml(student.gender)}</td>
-      <td>${escapeHtml(student.ageUsed)}</td>
-      <td>${formatStation(student.stations["Sit-ups"])}</td>
-      <td>${formatStation(student.stations["Standing Broad Jump"])}</td>
-      <td>${formatStation(student.stations["Sit and Reach"])}</td>
-      <td>${formatStation(student.stations["Inclined Pull-up"])}</td>
-      <td>${formatStation(student.stations["Shuttle Run"])}</td>
-      <td>${formatStation(student.stations["1.6km Run"])}</td>
-      <td>${escapeHtml(student.totalPoints)}</td>
-      <td><span class="award ${awardClass(student.award)}">${escapeHtml(student.award)}</span></td>
-    </tr>
-  `).join("");
+function filterResults() {
+  const searchText =
+    document
+      .getElementById('searchInput')
+      .value
+      .trim()
+      .toLowerCase();
 
-  els.tableWrap.style.display = students.length ? "block" : "none";
+  const selectedAward =
+    document.getElementById(
+      'awardFilter'
+    ).value;
+
+  filteredStudents =
+    allStudents.filter(student => {
+      const searchableText = [
+        student.no,
+        student.name,
+        student.id,
+        student.className
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      const matchesSearch =
+        !searchText ||
+        searchableText.includes(
+          searchText
+        );
+
+      const matchesAward =
+        !selectedAward ||
+        normaliseAward(
+          student.award
+        ) === selectedAward;
+
+      return (
+        matchesSearch &&
+        matchesAward
+      );
+    });
+
+  renderResults();
 }
 
-function formatStation(station) {
-  if (!station || station.status === "Missing") {
-    return `<span class="missing">-</span>`;
+function renderResults() {
+  renderTable();
+  renderCards();
+
+  document
+    .getElementById('emptyMessage')
+    .classList.toggle(
+      'hidden',
+      filteredStudents.length > 0
+    );
+}
+
+function renderTable() {
+  const body =
+    document.getElementById('resultsBody');
+
+  body.innerHTML = '';
+
+  filteredStudents.forEach(student => {
+    const row =
+      document.createElement('tr');
+
+    const stationCells =
+      STATIONS.map(station => {
+        return (
+          '<td>' +
+          stationHtml(
+            student.stations?.[station],
+            station
+          ) +
+          '</td>'
+        );
+      }).join('');
+
+    row.innerHTML = `
+      <td>
+        ${escapeHtml(student.no)}
+      </td>
+
+      <td class="student-name">
+        ${escapeHtml(student.name)}
+      </td>
+
+      ${stationCells}
+
+      <td>
+        <strong>
+          ${escapeHtml(
+            student.totalPoints ?? 0
+          )}
+        </strong>
+      </td>
+
+      <td>
+        ${awardHtml(student.award)}
+      </td>
+
+      <td>
+        ${statusHtml(student)}
+      </td>
+    `;
+
+    body.appendChild(row);
+  });
+}
+
+function renderCards() {
+  const container =
+    document.getElementById('cardView');
+
+  container.innerHTML = '';
+
+  filteredStudents.forEach(student => {
+    const card =
+      document.createElement('article');
+
+    const complete =
+      isStudentComplete(student);
+
+    card.className =
+      'student-card' +
+      (
+        complete
+          ? ''
+          : ' incomplete'
+      );
+
+    const stationCards =
+      STATIONS.map(station => {
+        const stationData =
+          student.stations?.[station];
+
+        return `
+          <div class="station-card">
+            <small>
+              ${escapeHtml(
+                SHORT_STATION_NAMES[
+                  station
+                ]
+              )}
+            </small>
+
+            <strong>
+              ${escapeHtml(
+                stationScoreText(
+                  stationData,
+                  station
+                )
+              )}
+            </strong>
+
+            ${gradeHtml(
+              stationData?.grade
+            )}
+          </div>
+        `;
+      }).join('');
+
+    card.innerHTML = `
+      <div class="student-card-header">
+        <div class="register-number">
+          ${escapeHtml(student.no)}
+        </div>
+
+        <div>
+          <div class="card-name">
+            ${escapeHtml(student.name)}
+          </div>
+
+          <div class="card-meta">
+            ${escapeHtml(
+              student.className
+            )}
+            ·
+            ${escapeHtml(
+              student.totalPoints ?? 0
+            )}
+            points
+            ·
+            ${
+              complete
+                ? 'Complete'
+                : 'Incomplete'
+            }
+          </div>
+        </div>
+
+        ${awardHtml(student.award)}
+      </div>
+
+      <div class="station-grid">
+
+              ${stationCards}
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+}
+
+function stationHtml(
+  stationData,
+  station
+) {
+  const score =
+    stationScoreText(
+      stationData,
+      station
+    );
+
+  return `
+    <span class="score">
+      ${escapeHtml(score)}
+    </span>
+
+    <br>
+
+    ${gradeHtml(
+      stationData?.grade
+    )}
+  `;
+}
+
+function stationScoreText(
+  stationData
+) {
+  if (!stationData) {
+    return 'Missing';
   }
 
-  const score = station.score || "-";
-  const grade = station.grade || "-";
-  const status = station.status && station.status !== "Done" ? ` ${station.status}` : "";
+  const score =
+    String(
+      stationData.score ?? ''
+    ).trim();
 
-  return `${escapeHtml(score)} <strong>${escapeHtml(grade)}</strong>${escapeHtml(status)}`;
+  if (score) {
+    return score;
+  }
+
+  const status =
+    String(
+      stationData.status ?? ''
+    ).trim();
+
+  if (
+    status &&
+    status.toLowerCase() !==
+    'done'
+  ) {
+    return status;
+  }
+
+  return 'Missing';
 }
 
-function awardClass(award) {
-  return String(award || "").toLowerCase().replace(/\s+/g, "-");
+function gradeHtml(grade) {
+  const cleanGrade =
+    String(grade || '')
+      .trim()
+      .toUpperCase();
+
+  if (!cleanGrade) {
+    return `
+      <span class="grade grade-missing">
+        —
+      </span>
+    `;
+  }
+
+  return `
+    <span class="grade grade-${cleanGrade.toLowerCase()}">
+      ${escapeHtml(cleanGrade)}
+    </span>
+  `;
+}
+
+function awardHtml(award) {
+  const cleanAward =
+    normaliseAward(award);
+
+  let className =
+    'award-incomplete';
+
+  if (cleanAward === 'Gold') {
+    className =
+      'award-gold';
+  } else if (
+    cleanAward === 'Silver'
+  ) {
+    className =
+      'award-silver';
+  } else if (
+    cleanAward === 'Bronze'
+  ) {
+    className =
+      'award-bronze';
+  } else if (
+    cleanAward === 'No Award'
+  ) {
+    className =
+      'award-none';
+  }
+
+  return `
+    <span class="award ${className}">
+      ${escapeHtml(cleanAward)}
+    </span>
+  `;
+}
+
+function normaliseAward(award) {
+  return (
+    String(award || '').trim() ||
+    'Incomplete'
+  );
+}
+
+function isStudentComplete(student) {
+  return STATIONS.every(station => {
+    const grade =
+      String(
+        student.stations?.[station]
+          ?.grade || ''
+      )
+        .trim()
+        .toUpperCase();
+
+    return [
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+      'F'
+    ].includes(grade);
+  });
+}
+
+function statusHtml(student) {
+  const missingStations =
+    STATIONS.filter(station => {
+      const grade =
+        String(
+          student.stations?.[station]
+            ?.grade || ''
+        ).trim();
+
+      return !grade;
+    });
+
+  if (!missingStations.length) {
+    return `
+      <span class="status-complete">
+        Complete
+      </span>
+    `;
+  }
+
+  const names =
+    missingStations.map(station => {
+      return SHORT_STATION_NAMES[
+        station
+      ];
+    });
+
+  return `
+    <span class="status-incomplete">
+      Missing:
+      ${escapeHtml(
+        names.join(', ')
+      )}
+    </span>
+  `;
+}
+
+function hideResults() {
+  allStudents = [];
+  filteredStudents = [];
+
+  document
+    .getElementById('summaryPanel')
+    .classList.add('hidden');
+
+  document
+    .getElementById('resultsPanel')
+    .classList.add('hidden');
+}
+
+function setMessage(
+  text,
+  type = ''
+) {
+  const element =
+    document.getElementById('message');
+
+  element.textContent =
+    text || '';
+
+  element.className =
+    'message' +
+    (
+      type
+        ? ' ' + type
+        : ''
+    );
+}
+
+function showLoading(text) {
+  document.getElementById(
+    'loadingText'
+  ).textContent = text;
+
+  document
+    .getElementById('loading')
+    .classList.remove('hidden');
+}
+
+function hideLoading() {
+  document
+    .getElementById('loading')
+    .classList.add('hidden');
+}
+
+function setText(id, value) {
+  const element =
+    document.getElementById(id);
+
+  if (element) {
+    element.textContent =
+      String(value ?? '');
+  }
+}
+
+function goBack() {
+  if (history.length > 1) {
+    history.back();
+  } else {
+    location.href =
+      'index.html';
+  }
 }
 
 function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
