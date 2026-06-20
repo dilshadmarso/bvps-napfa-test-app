@@ -5,42 +5,48 @@
 
   <meta
     name="viewport"
-    content="width=device-width, initial-scale=1, maximum-scale=1"
+    content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+  >
+
+  <meta
+    name="theme-color"
+    content="#173b73"
   >
 
   <title>BVPS 1.6 km Run Timer</title>
 
- <style>
-  :root {
-    --navy: #173b73;
-    --navy-dark: #102b56;
+  <style>
+    :root {
+      --navy: #173b73;
+      --navy-dark: #102b56;
 
-    --green: #23875d;
-    --green-bg: #ddf7ea;
+      --green: #23875d;
+      --green-bg: #ddf7ea;
 
-    --amber: #956000;
-    --amber-bg: #fff1cf;
+      --amber: #956000;
+      --amber-bg: #fff1cf;
 
-    --red: #bd3748;
-    --red-bg: #ffe7eb;
+      --red: #bd3748;
+      --red-bg: #ffe7eb;
 
-    --background: #f5f7fb;
-    --card: #ffffff;
-    --line: #dce1e8;
-    --muted: #687386;
-    --text: #263142;
+      --background: #f5f7fb;
+      --card: #ffffff;
+      --line: #dce1e8;
+      --muted: #687386;
+      --text: #263142;
 
-    --shadow:
-      0 6px 20px rgba(20, 39, 73, 0.10);
-  }
+      --shadow:
+        0 6px 20px rgba(20, 39, 73, 0.10);
+    }
 
-  .completion-summary {
-    white-space: pre-line;
-  }
+    .completion-summary {
+      white-space: pre-line;
+    }
 
-  * {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
 
     body {
       margin: 0;
@@ -70,10 +76,6 @@
       padding-bottom:
         calc(20px + env(safe-area-inset-bottom));
     }
-
-    /* =========================
-       TOP NAVIGATION
-    ========================= */
 
     .topbar {
       display: grid;
@@ -109,10 +111,6 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-
-    /* =========================
-       HEADER AND PANELS
-    ========================= */
 
     .hero {
       margin-bottom: 12px;
@@ -232,10 +230,6 @@
       font-weight: 800;
     }
 
-    /* =========================
-       ASSIGNMENT CARDS
-    ========================= */
-
     .assignment-grid {
       display: grid;
       grid-template-columns:
@@ -252,7 +246,8 @@
 
     .student-header {
       display: grid;
-      grid-template-columns: 42px minmax(0, 1fr);
+      grid-template-columns:
+        42px minmax(0, 1fr);
       gap: 8px;
       align-items: center;
     }
@@ -314,10 +309,6 @@
       border-radius: 9px;
       background: white;
     }
-
-    /* =========================
-       TIMING SCREEN
-    ========================= */
 
     .context-bar {
       position: sticky;
@@ -508,10 +499,6 @@
       backdrop-filter: blur(8px);
     }
 
-    /* =========================
-       REVIEW TABLE
-    ========================= */
-
     .table-wrapper {
       overflow-x: auto;
       border: 1px solid var(--line);
@@ -546,10 +533,6 @@
       line-height: 1.45;
     }
 
-    /* =========================
-       LOADING
-    ========================= */
-
     .loading-overlay {
       position: fixed;
       inset: 0;
@@ -583,10 +566,6 @@
         transform: rotate(360deg);
       }
     }
-
-    /* =========================
-       RESPONSIVE LAYOUT
-    ========================= */
 
     @media (min-width: 600px) {
       .runner-grid {
@@ -658,7 +637,6 @@
   </div>
 
   <main class="page">
-
     <nav class="topbar">
       <button
         class="nav-button"
@@ -685,14 +663,15 @@
       <h1>BVPS 1.6 km Run Timer</h1>
 
       <p>
-        Phone and iPad-ready timing with local recovery
-        and fast batch saving.
+        Phone and iPad-ready timing with local backup
+        and batch saving.
       </p>
     </header>
 
-    <!-- SETUP -->
-
-    <section id="setupPanel" class="panel">
+    <section
+      id="setupPanel"
+      class="panel"
+    >
       <h2>Set Up Run</h2>
 
       <div class="form-grid">
@@ -752,8 +731,6 @@
       ></div>
     </section>
 
-    <!-- ASSIGNMENTS -->
-
     <section
       id="assignmentPanel"
       class="panel hidden"
@@ -762,7 +739,7 @@
 
       <div class="information">
         Assign every pupil to Wave 1, Wave 2 or
-        Not Running. A reason is required for every
+        Not Running. Select a reason for every
         Not Running pupil.
       </div>
 
@@ -800,8 +777,6 @@
         </button>
       </div>
     </section>
-
-    <!-- TIMING -->
 
     <section
       id="timingPanel"
@@ -845,9 +820,9 @@
       </div>
 
       <div class="information">
-        Tap a pupil once at the finish line. Times are
-        saved immediately on this device. Pupil positions
-        will not move during the wave.
+        Tap each pupil once when the pupil crosses the
+        finish line. Finish times are immediately backed
+        up on this device.
       </div>
 
       <div
@@ -891,8 +866,6 @@
         </button>
       </div>
     </section>
-
-    <!-- REVIEW -->
 
     <section
       id="reviewPanel"
@@ -962,18 +935,16 @@
       </div>
     </section>
 
-    <!-- COMPLETION -->
-
     <section
       id="completionPanel"
       class="panel hidden"
     >
       <h2>Run Session Completed</h2>
 
-  <div
-  id="completionSummary"
-  class="success-message completion-summary"
-></div>
+      <div
+        id="completionSummary"
+        class="success-message completion-summary"
+      ></div>
 
       <div class="button-row">
         <button
@@ -1001,7 +972,6 @@
         </button>
       </div>
     </section>
-
   </main>
 
   <script src="run-timing.js"></script>
