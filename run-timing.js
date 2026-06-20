@@ -228,25 +228,19 @@ function formatStation(station) {
 
   const score = station.score || "-";
   const grade = station.grade || "-";
-  const status =
-    station.status && station.status !== "Done"
-      ? ` ${station.status}`
+  const statusText = String(station.status || "").trim();
+
+  const hideStatuses = [
+    "Done",
+    "Completed",
+    "Complete",
+    "Saved"
+  ];
+
+  const showStatus =
+    statusText && !hideStatuses.includes(statusText)
+      ? ` ${statusText}`
       : "";
 
-  return `${escapeHtml(score)} <strong>${escapeHtml(grade)}</strong>${escapeHtml(status)}`;
-}
-
-function awardClass(award) {
-  return String(award || "")
-    .toLowerCase()
-    .replace(/\s+/g, "-");
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return `${escapeHtml(score)} <strong>${escapeHtml(grade)}</strong>${escapeHtml(showStatus)}`;
 }
