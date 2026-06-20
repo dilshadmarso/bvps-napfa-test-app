@@ -1,2227 +1,239 @@
-const GOOGLE_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec';
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbyjiK1MWx30tV0wxZsTf5k5OLaGbQsvbCNacuBO8Ypa7lNTDMK46BRZY0T3Vn3dgP3X/exec";
 
-const RUN_DRAFT_KEY = 'BVPS_NAPFA_RUN_DRAFT_V5';
-const SETTINGS_KEY = 'BVPS_NAPFA_SETTINGS_V1';
-const COMPLETED_BACKUP_MS = 24 * 60 * 60 * 1000;
-const API_TIMEOUT_MS = 20000;
+const els = {};
 
-const NOT_RUNNING_REASONS = [
-  'Absent',
-  'Did Not Start',
-  'Medical',
-  'Injured',
-  'Retest Needed',
-  'Not Running'
-];
+document.addEventListener("DOMContentLoaded", () => {
+  els.level = document.getElementById("levelSelect");
+  els.className = document.getElementById("classSelect");
+  els.loadBtn = document.getElementById("loadResultsBtn");
+  els.status = document.getElementById("statusBox");
+  els.summary = document.getElementById("summaryBox");
+  els.tableWrap = document.getElementById("resultsTableWrap");
+  els.resultsBody = document.getElementById("resultsBody");
 
-let setupData = {
-  levels: [],
-  classesByLevel: {}
-};
+  els.level.addEventListener("change", handleLevelChange);
+  els.loadBtn.addEventListener("click", loadResults);
 
-let students = [];
-
-let sessionId = '';
-let selectedTestDate = '';
-let selectedClass = '';
-let currentWave = 'Wave 1';
-
-let assignmentsConfirmed = false;
-
-let sessionSetupSynced = false;
-let sessionSetupSyncing = false;
-let sessionSetupSyncError = '';
-let sessionSetupSyncPromise = null;
-
-let waveStarted = false;
-let waveEnded = false;
-let waveSaved = false;
-
-let startPerformanceTime = null;
-let startWallClock = null;
-let timerFrame = null;
-
-let currentWaveResults = [];
-let waveOneResults = [];
-let waveTwoResults = [];
-
-let saveInProgress = false;
-let wakeLock = null;
-let audioContext = null;
-
-
-/* =====================================================
-   PAGE EVENTS
-===================================================== */
-
-window.addEventListener('load', initialisePage);
-window.addEventListener('beforeunload', handleBeforeUnload);
-
-window.addEventListener('online', () => {
-  if (
-    assignmentsConfirmed &&
-    !sessionSetupSynced &&
-    !sessionSetupSyncing
-  ) {
-    syncSessionSetupInBackground();
-  }
+  loadLevels();
 });
 
-document.addEventListener('visibilitychange', async () => {
-  if (
-    document.visibilityState === 'visible' &&
-    waveStarted &&
-    !waveEnded
-  ) {
-    await requestWakeLock();
-  }
-});
-
-
-/* =====================================================
-   INITIALISE
-===================================================== */
-
-async function initialisePage() {
-  setToday();
-  cleanupExpiredBackup();
-
-  const restored = restoreDraft();
-
-  if (!restored) {
-    await loadSetupData();
-  }
+function setStatus(message, type = "info") {
+  els.status.textContent = message;
+  els.status.className = `status ${type}`;
 }
 
-
-function setToday() {
-  const date = new Date();
-
-  document.getElementById('testDate').value =
-    date.getFullYear() +
-    '-' +
-    String(date.getMonth() + 1).padStart(2, '0') +
-    '-' +
-    String(date.getDate()).padStart(2, '0');
+function setLoading(isLoading) {
+  els.loadBtn.disabled = isLoading;
+  els.level.disabled = isLoading;
+  els.className.disabled = isLoading || !els.level.value;
+  els.loadBtn.textContent = isLoading ? "Loading..." : "View Results";
 }
 
+async function fetchApi(action, params = {}) {
+  const url = new URL(API_URL);
+  url.searchParams.set("action", action);
 
-/* =====================================================
-   API
-===================================================== */
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
 
-async function api(payload, timeoutMs = API_TIMEOUT_MS) {
-  const controller = new AbortController();
+  const response = await fetch(url.toString(), { method: "GET" });
+  const text = await response.text();
 
-  const timeoutId = window.setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
+  let data;
 
   try {
-    const response = await fetch(
-      GOOGLE_APPS_SCRIPT_URL,
-      {
-        method: 'POST',
+    data = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Backend did not return JSON. Response: ${text.slice(0, 150)}`);
+  }
 
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8'
-        },
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || `Request failed: ${response.status}`);
+  }
 
-        body: JSON.stringify(payload),
+  return data;
+}
 
-        signal: controller.signal,
-        cache: 'no-store'
-      }
+async function loadLevels() {
+  try {
+    setStatus("Loading levels...");
+    setLoading(true);
+
+    const data = await fetchApi("getViewLevels");
+    const levels = Array.isArray(data) ? data : data.levels;
+
+    els.level.innerHTML = `<option value="">Select level</option>`;
+
+    levels.forEach(level => {
+      const option = document.createElement("option");
+      option.value = level;
+      option.textContent = level;
+      els.level.appendChild(option);
+    });
+
+    els.className.innerHTML = `<option value="">Select class</option>`;
+    els.className.disabled = true;
+
+    setStatus(
+      levels.length ? "Select a level and class." : "No levels found in Student_Master.",
+      levels.length ? "info" : "warn"
     );
-
-    const text = await response.text();
-
-    let result;
-
-    try {
-      result = JSON.parse(text);
-    } catch (error) {
-      throw new Error(
-        'The server returned an invalid response.'
-      );
-    }
-
-    if (!result.success) {
-      throw new Error(
-        result.error ||
-        result.message ||
-        'The request failed.'
-      );
-    }
-
-    return result;
-
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      throw new Error(
-        'The connection took too long. Your data remains saved on this device.'
-      );
-    }
-
-    throw error;
-
+  } catch (err) {
+    console.error(err);
+    setStatus(`Unable to load levels: ${err.message}`, "error");
   } finally {
-    window.clearTimeout(timeoutId);
+    setLoading(false);
   }
 }
 
+async function handleLevelChange() {
+  const level = els.level.value;
+  clearResults();
 
-/* =====================================================
-   DISPLAY HELPERS
-===================================================== */
+  els.className.innerHTML = `<option value="">Select class</option>`;
+  els.className.disabled = true;
 
-function showLoading(text) {
-  setText('loadingText', text);
-
-  document
-    .getElementById('loading')
-    .classList.remove('hidden');
-}
-
-
-function hideLoading() {
-  document
-    .getElementById('loading')
-    .classList.add('hidden');
-}
-
-
-function setText(id, value) {
-  const element = document.getElementById(id);
-
-  if (element) {
-    element.textContent = String(value ?? '');
-  }
-}
-
-
-function showPanel(id) {
-  [
-    'setupPanel',
-    'assignmentPanel',
-    'timingPanel',
-    'reviewPanel',
-    'completionPanel'
-  ].forEach(panelId => {
-    const panel = document.getElementById(panelId);
-
-    if (panel) {
-      panel.classList.toggle(
-        'hidden',
-        panelId !== id
-      );
-    }
-  });
-}
-
-
-function updateSaveStatus(text, state = '') {
-  const element = document.getElementById('saveStatus');
-
-  if (!element) {
+  if (!level) {
+    setStatus("Select a level.");
     return;
   }
-
-  element.textContent = text;
-  element.className = 'status-badge';
-
-  if (state) {
-    element.classList.add(state);
-  }
-}
-
-
-function setRetrySetupSyncVisible(visible) {
-  const button =
-    document.getElementById('retrySetupSyncBtn');
-
-  if (!button) {
-    return;
-  }
-
-  button.classList.toggle('hidden', !visible);
-}
-
-
-/* =====================================================
-   LOAD LEVELS AND CLASSES
-===================================================== */
-
-async function loadSetupData() {
-  showLoading('Loading levels and classes…');
 
   try {
-    const result = await api({
-      action: 'getStationSetupData'
+    setStatus("Loading classes...");
+    setLoading(true);
+
+    const data = await fetchApi("getViewClasses", { level });
+    const classes = Array.isArray(data) ? data : data.classes;
+
+    els.className.innerHTML = `<option value="">Select class</option>`;
+
+    classes.forEach(className => {
+      const option = document.createElement("option");
+      option.value = className;
+      option.textContent = className;
+      els.className.appendChild(option);
     });
 
-    setupData = {
-      levels: result.levels || [],
-      classesByLevel:
-        result.classesByLevel || {}
-    };
+    els.className.disabled = false;
 
-    const levelSelect =
-      document.getElementById('levelSelect');
-
-    levelSelect.innerHTML =
-      '<option value="">Select level</option>';
-
-    setupData.levels.forEach(level => {
-      levelSelect.add(
-        new Option(level, level)
-      );
-    });
-
-    setText(
-      'setupMessage',
-      'Select the test date, level and class.'
+    setStatus(
+      classes.length
+        ? "Select a class, then tap View Results."
+        : "No classes found for this level.",
+      classes.length ? "info" : "warn"
     );
-
-  } catch (error) {
-    setText(
-      'setupMessage',
-      'Unable to load levels and classes: ' +
-      error.message
-    );
-
+  } catch (err) {
+    console.error(err);
+    setStatus(`Unable to load classes: ${err.message}`, "error");
   } finally {
-    hideLoading();
+    setLoading(false);
   }
 }
 
+async function loadResults() {
+  const level = els.level.value;
+  const className = els.className.value;
 
-function updateClasses() {
-  const level =
-    document.getElementById('levelSelect').value;
-
-  const classSelect =
-    document.getElementById('classSelect');
-
-  classSelect.innerHTML =
-    '<option value="">Select class</option>';
-
-  const classes =
-    setupData.classesByLevel[level] || [];
-
-  classes.forEach(className => {
-    classSelect.add(
-      new Option(className, className)
-    );
-  });
-}
-
-
-/* =====================================================
-   LOAD CLASS
-===================================================== */
-
-async function loadClassStudents() {
-  const date =
-    document.getElementById('testDate').value;
-
-  const className =
-    document.getElementById('classSelect').value;
-
-  if (!date || !className) {
-    alert(
-      'Please select the test date, level and class.'
-    );
-
+  if (!level || !className) {
+    setStatus("Please select both level and class.", "warn");
     return;
   }
-
-  const button =
-    document.getElementById('loadClassBtn');
-
-  button.disabled = true;
-
-  showLoading('Loading pupils…');
 
   try {
-    const result = await api({
-      action: 'getRunStudentsByClass',
-      className: className
-    });
+    setStatus("Loading results...");
+    setLoading(true);
+    clearResults();
 
-    students = (result.students || []).map(student => ({
-      ...student,
-      assignment: '',
-      notRunningReason: ''
-    }));
+    const data = await fetchApi("getViewResults", { level, className });
+    const students = data.students || [];
 
-    if (!students.length) {
-      throw new Error(
-        'No pupils were found for this class.'
-      );
-    }
+    renderSummary(data.summary || {}, students.length);
+    renderResults(students);
 
-    selectedTestDate = date;
-    selectedClass = className;
-    sessionId = createSessionId(className);
-
-    assignmentsConfirmed = false;
-
-    sessionSetupSynced = false;
-    sessionSetupSyncing = false;
-    sessionSetupSyncError = '';
-    sessionSetupSyncPromise = null;
-
-    waveStarted = false;
-    waveEnded = false;
-    waveSaved = false;
-
-    currentWaveResults = [];
-    waveOneResults = [];
-    waveTwoResults = [];
-
-    showPanel('assignmentPanel');
-    renderAssignments();
-    saveDraft();
-
-  } catch (error) {
-    alert(
-      'Unable to load the class: ' +
-      error.message
+    setStatus(
+      students.length
+        ? `Loaded ${students.length} student result(s).`
+        : "No saved results found for this class yet.",
+      students.length ? "success" : "warn"
     );
-
+  } catch (err) {
+    console.error(err);
+    setStatus(`Unable to load results: ${err.message}`, "error");
   } finally {
-    hideLoading();
-    button.disabled = false;
+    setLoading(false);
   }
 }
 
-
-function createSessionId(className) {
-  return (
-    'RUN-' +
-    String(className)
-      .replace(/[^A-Za-z0-9]/g, '') +
-    '-' +
-    Date.now() +
-    '-' +
-    Math.random()
-      .toString(36)
-      .slice(2, 7)
-      .toUpperCase()
-  );
+function clearResults() {
+  els.summary.innerHTML = "";
+  els.resultsBody.innerHTML = "";
+  els.tableWrap.style.display = "none";
 }
 
+function renderSummary(summary, studentCount) {
+  const cards = [
+    ["Students", studentCount],
+    ["Gold", summary.Gold || 0],
+    ["Silver", summary.Silver || 0],
+    ["Bronze", summary.Bronze || 0],
+    ["No Award", summary["No Award"] || 0],
+    ["Incomplete", summary.Incomplete || 0]
+  ];
 
-/* =====================================================
-   ASSIGNMENTS
-===================================================== */
-
-function renderAssignments() {
-  const grid =
-    document.getElementById('assignmentGrid');
-
-  grid.innerHTML = '';
-
-  students.forEach((student, index) => {
-    const card =
-      document.createElement('article');
-
-    card.className = 'assignment-card';
-
-    card.innerHTML = `
-      <div class="student-header">
-        <div class="student-number">
-          ${escapeHtml(student.No)}
-        </div>
-
-        <div class="student-name">
-          ${escapeHtml(student.Name)}
-        </div>
-      </div>
-
-      <div class="assignment-actions">
-        <button
-          type="button"
-          class="wave-one-button ${
-            student.assignment === 'Wave 1'
-              ? 'active'
-              : ''
-          }"
-          onclick="setAssignment(${index}, 'Wave 1')"
-        >
-          Wave 1
-        </button>
-
-        <button
-          type="button"
-          class="wave-two-button ${
-            student.assignment === 'Wave 2'
-              ? 'active'
-              : ''
-          }"
-          onclick="setAssignment(${index}, 'Wave 2')"
-        >
-          Wave 2
-        </button>
-
-        <button
-          type="button"
-          class="not-running-button ${
-            student.assignment === 'Not Running'
-              ? 'active'
-              : ''
-          }"
-          onclick="setAssignment(${index}, 'Not Running')"
-        >
-          Not Running
-        </button>
-      </div>
-
-      ${
-        student.assignment === 'Not Running'
-          ? renderReasonSelect(student, index)
-          : ''
-      }
-    `;
-
-    grid.appendChild(card);
-  });
-
-  updateAssignmentSummary();
-}
-
-
-function renderReasonSelect(student, index) {
-  const options = NOT_RUNNING_REASONS
-    .map(reason => {
-      const selected =
-        student.notRunningReason === reason
-          ? 'selected'
-          : '';
-
-      return `
-        <option value="${escapeHtml(reason)}" ${selected}>
-          ${escapeHtml(reason)}
-        </option>
-      `;
-    })
-    .join('');
-
-  return `
-    <select
-      class="reason-select"
-      onchange="setReason(${index}, this.value)"
-    >
-      <option value="">Select reason</option>
-      ${options}
-    </select>
-  `;
-}
-
-
-function setAssignment(index, value) {
-  const student = students[index];
-
-  student.assignment =
-    student.assignment === value
-      ? ''
-      : value;
-
-  if (student.assignment !== 'Not Running') {
-    student.notRunningReason = '';
-  }
-
-  renderAssignments();
-  saveDraft();
-}
-
-
-function setReason(index, value) {
-  students[index].notRunningReason = value;
-
-  updateAssignmentSummary();
-  saveDraft();
-}
-
-
-function autoAssignWaves() {
-  const runningStudents =
-    students.filter(student => {
-      return student.assignment !== 'Not Running';
-    });
-
-  const waveOneTarget =
-    Math.ceil(runningStudents.length / 2);
-
-  let assignedRunning = 0;
-
-  students.forEach(student => {
-    if (student.assignment === 'Not Running') {
-      return;
-    }
-
-    student.assignment =
-      assignedRunning < waveOneTarget
-        ? 'Wave 1'
-        : 'Wave 2';
-
-    assignedRunning++;
-  });
-
-  renderAssignments();
-  saveDraft();
-}
-
-
-function resetAssignments() {
-  const confirmed = confirm(
-    'Clear all pupil assignments?'
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  students.forEach(student => {
-    student.assignment = '';
-    student.notRunningReason = '';
-  });
-
-  renderAssignments();
-  saveDraft();
-}
-
-
-function updateAssignmentSummary() {
-  const waveOne = students.filter(student => {
-    return student.assignment === 'Wave 1';
-  }).length;
-
-  const waveTwo = students.filter(student => {
-    return student.assignment === 'Wave 2';
-  }).length;
-
-  const notRunning = students.filter(student => {
-    return student.assignment === 'Not Running';
-  }).length;
-
-  const unassigned = students.filter(student => {
-    return !student.assignment;
-  }).length;
-
-  document.getElementById(
-    'assignmentSummary'
-  ).innerHTML = `
-    <div class="information">
-      Wave 1: <strong>${waveOne}</strong>
-      · Wave 2: <strong>${waveTwo}</strong>
-      · Not Running: <strong>${notRunning}</strong>
-      · Unassigned: <strong>${unassigned}</strong>
+  els.summary.innerHTML = cards.map(([label, value]) => `
+    <div class="summary-card">
+      <div class="summary-value">${escapeHtml(value)}</div>
+      <div class="summary-label">${escapeHtml(label)}</div>
     </div>
-  `;
+  `).join("");
 }
 
+function renderResults(students) {
+  els.resultsBody.innerHTML = students.map(student => `
+    <tr>
+      <td>${escapeHtml(student.no)}</td>
+      <td class="name-cell">${escapeHtml(student.name)}</td>
+      <td>${escapeHtml(student.gender)}</td>
+      <td>${escapeHtml(student.ageUsed)}</td>
+      <td>${formatStation(student.stations["Sit-ups"])}</td>
+      <td>${formatStation(student.stations["Standing Broad Jump"])}</td>
+      <td>${formatStation(student.stations["Sit and Reach"])}</td>
+      <td>${formatStation(student.stations["Inclined Pull-up"])}</td>
+      <td>${formatStation(student.stations["Shuttle Run"])}</td>
+      <td>${formatStation(student.stations["1.6km Run"])}</td>
+      <td>${escapeHtml(student.totalPoints)}</td>
+      <td><span class="award ${awardClass(student.award)}">${escapeHtml(student.award)}</span></td>
+    </tr>
+  `).join("");
 
-/* =====================================================
-   CONFIRM ASSIGNMENTS
-===================================================== */
-
-function confirmAssignments() {
-  const unassigned = students.filter(student => {
-    return !student.assignment;
-  });
-
-  if (unassigned.length) {
-    alert(
-      `${unassigned.length} pupil(s) have not been assigned.`
-    );
-
-    return;
-  }
-
-  const missingReasons = students.filter(student => {
-    return (
-      student.assignment === 'Not Running' &&
-      !student.notRunningReason
-    );
-  });
-
-  if (missingReasons.length) {
-    alert(
-      'Please select a reason for every Not Running pupil.'
-    );
-
-    return;
-  }
-
-  const hasRunner = students.some(student => {
-    return (
-      student.assignment === 'Wave 1' ||
-      student.assignment === 'Wave 2'
-    );
-  });
-
-  if (!hasRunner) {
-    alert(
-      'At least one pupil must be assigned to a wave.'
-    );
-
-    return;
-  }
-
-  assignmentsConfirmed = true;
-
-  const hasWaveOne = students.some(student => {
-    return student.assignment === 'Wave 1';
-  });
-
-  currentWave =
-    hasWaveOne
-      ? 'Wave 1'
-      : 'Wave 2';
-
-  sessionSetupSynced = false;
-  sessionSetupSyncing = false;
-  sessionSetupSyncError = '';
-
-  saveDraft();
-
-  /*
-   * Open the timing screen immediately.
-   * Do not wait for Google Sheets.
-   */
-  prepareWave();
-
-  updateSaveStatus(
-    'Saved on device · syncing session…',
-    'pending'
-  );
-
-  setRetrySetupSyncVisible(false);
-
-  syncSessionSetupInBackground();
+  els.tableWrap.style.display = students.length ? "block" : "none";
 }
 
+function formatStation(station) {
+  if (!station || station.status === "Missing") {
+    return `<span class="missing">-</span>`;
+  }
 
-/* =====================================================
-   BACKGROUND SESSION SETUP SYNC
-===================================================== */
+  const score = station.score || "-";
+  const grade = station.grade || "-";
+  const status = station.status && station.status !== "Done" ? ` ${station.status}` : "";
 
-function createSessionSetupPayload() {
-  return {
-    action: 'saveRunSessionSetupBatch',
-
-    sessionId: sessionId,
-    testDate: selectedTestDate,
-    className: selectedClass,
-    mode: '1.6km Run',
-
-    students: students.map(student => ({
-      No: student.No,
-      ID: student.ID,
-      Name: student.Name,
-      Gender: student.Gender,
-      DOB: student.DOB,
-      assignment: student.assignment,
-      notRunningReason:
-        student.notRunningReason || ''
-    }))
-  };
+  return `${escapeHtml(score)} <strong>${escapeHtml(grade)}</strong>${escapeHtml(status)}`;
 }
 
-
-function syncSessionSetupInBackground() {
-  if (sessionSetupSyncing) {
-    return sessionSetupSyncPromise;
-  }
-
-  if (sessionSetupSynced) {
-    return Promise.resolve({
-      success: true
-    });
-  }
-
-  sessionSetupSyncing = true;
-  sessionSetupSyncError = '';
-
-  updateSaveStatus(
-    'Saved on device · syncing session…',
-    'pending'
-  );
-
-  setRetrySetupSyncVisible(false);
-  saveDraft();
-
-  sessionSetupSyncPromise = api(
-    createSessionSetupPayload()
-  )
-    .then(result => {
-      sessionSetupSynced = true;
-      sessionSetupSyncError = '';
-
-      updateSaveStatus(
-        'Session synced',
-        'saved'
-      );
-
-      setRetrySetupSyncVisible(false);
-      saveDraft();
-
-      return result;
-    })
-    .catch(error => {
-      sessionSetupSynced = false;
-      sessionSetupSyncError =
-        error.message ||
-        'Session synchronisation failed.';
-
-      updateSaveStatus(
-        'Saved on device · sync failed',
-        'failed'
-      );
-
-      setRetrySetupSyncVisible(true);
-      saveDraft();
-
-      return {
-        success: false,
-        error: sessionSetupSyncError
-      };
-    })
-    .finally(() => {
-      sessionSetupSyncing = false;
-      sessionSetupSyncPromise = null;
-    });
-
-  return sessionSetupSyncPromise;
+function awardClass(award) {
+  return String(award || "").toLowerCase().replace(/\s+/g, "-");
 }
-
-
-async function retrySessionSetupSync() {
-  if (sessionSetupSyncing) {
-    return;
-  }
-
-  const button =
-    document.getElementById('retrySetupSyncBtn');
-
-  button.disabled = true;
-
-  updateSaveStatus(
-    'Retrying session sync…',
-    'pending'
-  );
-
-  try {
-    const result =
-      await syncSessionSetupInBackground();
-
-    if (!result.success) {
-      alert(
-        'The session could not be synced yet. It remains stored on this device.'
-      );
-    }
-
-  } finally {
-    button.disabled = false;
-  }
-}
-
-
-function resumePendingSessionSync() {
-  if (
-    assignmentsConfirmed &&
-    !sessionSetupSynced &&
-    !sessionSetupSyncing
-  ) {
-    syncSessionSetupInBackground();
-  }
-}
-
-
-/* =====================================================
-   PREPARE WAVE
-===================================================== */
-
-function prepareWave() {
-  stopTimer();
-
-  waveStarted = false;
-  waveEnded = false;
-  waveSaved = false;
-
-  startPerformanceTime = null;
-  startWallClock = null;
-
-  currentWaveResults = [];
-
-  showPanel('timingPanel');
-
-  setText(
-    'sessionText',
-    `${selectedClass} · ${currentWave} · ${displayDate(selectedTestDate)}`
-  );
-
-  setText('timerValue', '00:00.0');
-
-  document.getElementById(
-    'startWaveBtn'
-  ).disabled = false;
-
-  document.getElementById(
-    'endWaveBtn'
-  ).disabled = true;
-
-  document.getElementById(
-    'undoBtn'
-  ).disabled = true;
-
-  if (sessionSetupSynced) {
-    updateSaveStatus(
-      'Session synced',
-      'saved'
-    );
-
-    setRetrySetupSyncVisible(false);
-
-  } else if (sessionSetupSyncing) {
-    updateSaveStatus(
-      'Saved on device · syncing session…',
-      'pending'
-    );
-
-    setRetrySetupSyncVisible(false);
-
-  } else if (sessionSetupSyncError) {
-    updateSaveStatus(
-      'Saved on device · sync failed',
-      'failed'
-    );
-
-    setRetrySetupSyncVisible(true);
-
-  } else {
-    updateSaveStatus(
-      'Saved on device'
-    );
-
-    setRetrySetupSyncVisible(false);
-  }
-
-  renderRunners();
-  saveDraft();
-}
-
-
-function currentRunners() {
-  return students.filter(student => {
-    return student.assignment === currentWave;
-  });
-}
-
-
-/* =====================================================
-   RUNNER BUTTONS
-===================================================== */
-
-function renderRunners() {
-  const grid =
-    document.getElementById('runnerGrid');
-
-  grid.innerHTML = '';
-
-  currentRunners().forEach(student => {
-    const finish =
-      currentWaveResults.find(result => {
-        return (
-          String(result.student.ID) ===
-          String(student.ID)
-        );
-      });
-
-    const button =
-      document.createElement('button');
-
-    button.type = 'button';
-
-    button.className =
-      'runner-button' +
-      (finish ? ' finished' : '');
-
-    button.disabled =
-      !waveStarted ||
-      waveEnded ||
-      Boolean(finish);
-
-    button.onclick = () => {
-      recordFinish(student);
-    };
-
-    if (finish) {
-      button.innerHTML = `
-        <div class="runner-number">
-          No. ${escapeHtml(student.No)}
-        </div>
-
-        <div class="runner-position">
-          #${finish.position}
-        </div>
-
-        <div class="runner-time">
-          ${formatTime(finish.elapsedSeconds)}
-        </div>
-
-        <div class="runner-name">
-          ${escapeHtml(student.Name)}
-        </div>
-      `;
-
-    } else {
-      button.innerHTML = `
-        <div class="runner-number">
-          No. ${escapeHtml(student.No)}
-        </div>
-
-        <div class="runner-name">
-          ${escapeHtml(student.Name)}
-        </div>
-
-        <div class="runner-time">
-          Tap at finish
-        </div>
-      `;
-    }
-
-    grid.appendChild(button);
-  });
-
-  setText(
-    'finishedCount',
-    `Finished: ${currentWaveResults.length} / ${currentRunners().length}`
-  );
-}
-
-
-/* =====================================================
-   TIMER
-===================================================== */
-
-async function startCurrentWave() {
-  if (waveStarted) {
-    return;
-  }
-
-  const confirmed = confirm(
-    `Start ${currentWave} now?`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  await requestWakeLock();
-  unlockAudio();
-
-  startPerformanceTime =
-    performance.now();
-
-  startWallClock =
-    Date.now();
-
-  waveStarted = true;
-  waveEnded = false;
-  waveSaved = false;
-
-  currentWaveResults = [];
-
-  document.getElementById(
-    'startWaveBtn'
-  ).disabled = true;
-
-  document.getElementById(
-    'endWaveBtn'
-  ).disabled = false;
-
-  updateSaveStatus(
-    sessionSetupSynced
-      ? 'Timing · session synced'
-      : 'Timing · saved locally',
-
-    sessionSetupSynced
-      ? 'saved'
-      : 'pending'
-  );
-
-  animateTimer();
-  renderRunners();
-  saveDraft();
-}
-
-
-function elapsedNow() {
-  if (startPerformanceTime !== null) {
-    return (
-      performance.now() -
-      startPerformanceTime
-    ) / 1000;
-  }
-
-  if (startWallClock) {
-    return (
-      Date.now() -
-      startWallClock
-    ) / 1000;
-  }
-
-  return 0;
-}
-
-
-function animateTimer() {
-  if (!waveStarted || waveEnded) {
-    return;
-  }
-
-  setText(
-    'timerValue',
-    formatTenths(elapsedNow())
-  );
-
-  timerFrame =
-    requestAnimationFrame(animateTimer);
-}
-
-
-function stopTimer() {
-  if (timerFrame) {
-    cancelAnimationFrame(timerFrame);
-  }
-
-  timerFrame = null;
-}
-
-
-/* =====================================================
-   RECORD FINISH
-===================================================== */
-
-function recordFinish(student) {
-  if (!waveStarted || waveEnded) {
-    return;
-  }
-
-  const alreadyFinished =
-    currentWaveResults.some(result => {
-      return (
-        String(result.student.ID) ===
-        String(student.ID)
-      );
-    });
-
-  if (alreadyFinished) {
-    return;
-  }
-
-  const result = {
-    student: student,
-
-    elapsedSeconds:
-      Number(elapsedNow().toFixed(2)),
-
-    position:
-      currentWaveResults.length + 1,
-
-    attemptNo: 1,
-    remarks: ''
-  };
-
-  currentWaveResults.push(result);
-
-  /*
-   * Save immediately to the device.
-   */
-  saveDraft();
-
-  vibrate(50);
-  playTone(620, 0.045);
-
-  document.getElementById(
-    'undoBtn'
-  ).disabled = false;
-
-  renderRunners();
-}
-
-
-function undoLastFinish() {
-  if (
-    !currentWaveResults.length ||
-    waveSaved
-  ) {
-    return;
-  }
-
-  currentWaveResults.pop();
-
-  currentWaveResults.forEach(
-    (result, index) => {
-      result.position = index + 1;
-    }
-  );
-
-  vibrate([30, 30, 30]);
-
-  document.getElementById(
-    'undoBtn'
-  ).disabled =
-    currentWaveResults.length === 0;
-
-  renderRunners();
-  saveDraft();
-}
-
-
-function endCurrentWave() {
-  if (!waveStarted || waveEnded) {
-    return;
-  }
-
-  const unfinished =
-    currentRunners().filter(student => {
-      return !currentWaveResults.some(result => {
-        return (
-          String(result.student.ID) ===
-          String(student.ID)
-        );
-      });
-    });
-
-  if (unfinished.length) {
-    const message =
-      `End ${currentWave} with ` +
-      `${unfinished.length} unfinished pupil(s)?\n\n` +
-      unfinished
-        .map(student => {
-          return (
-            `No. ${student.No} ${student.Name}`
-          );
-        })
-        .join('\n');
-
-    if (!confirm(message)) {
-      return;
-    }
-  }
-
-  waveEnded = true;
-
-  stopTimer();
-  releaseWakeLock();
-
-  document.getElementById(
-    'endWaveBtn'
-  ).disabled = true;
-
-  showReview();
-  saveDraft();
-}
-
-
-/* =====================================================
-   REVIEW
-===================================================== */
-
-function showReview() {
-  showPanel('reviewPanel');
-
-  setText(
-    'reviewTitle',
-    `Review ${currentWave}`
-  );
-
-  const body =
-    document.getElementById('reviewBody');
-
-  body.innerHTML = '';
-
-  currentWaveResults.forEach(result => {
-    const row =
-      document.createElement('tr');
-
-    row.innerHTML = `
-      <td>${result.position}</td>
-
-      <td>
-        ${escapeHtml(result.student.No)}
-      </td>
-
-      <td>
-        <strong>
-          ${escapeHtml(result.student.Name)}
-        </strong>
-      </td>
-
-      <td>
-        ${formatTime(result.elapsedSeconds)}
-      </td>
-
-      <td>
-        ${escapeHtml(
-          result.grade ||
-          'Calculated on save'
-        )}
-      </td>
-    `;
-
-    body.appendChild(row);
-  });
-
-  document.getElementById(
-    'saveWaveBtn'
-  ).classList.toggle(
-    'hidden',
-    waveSaved
-  );
-
-  document.getElementById(
-    'returnTimingBtn'
-  ).classList.toggle(
-    'hidden',
-    waveSaved
-  );
-
-  document.getElementById(
-    'nextWaveBtn'
-  ).classList.add('hidden');
-
-  document.getElementById(
-    'completeBtn'
-  ).classList.add('hidden');
-
-  if (waveSaved) {
-    showPostSaveButtons();
-  }
-
-  setText(
-    'reviewMessage',
-    waveSaved
-      ? `${currentWave} saved to Google Sheets.`
-      : `${currentWaveResults.length} result(s) ready to save.`
-  );
-}
-
-
-function returnToTiming() {
-  if (waveSaved) {
-    return;
-  }
-
-  showPanel('timingPanel');
-  renderRunners();
-}
-
-
-/* =====================================================
-   SAVE WAVE
-===================================================== */
-
-async function saveCurrentWave() {
-  if (saveInProgress) {
-    return;
-  }
-
-  if (!currentWaveResults.length) {
-    alert(
-      'There are no completed runners to save.'
-    );
-
-    return;
-  }
-
-  saveInProgress = true;
-
-  const button =
-    document.getElementById('saveWaveBtn');
-
-  button.disabled = true;
-
-  if (!sessionSetupSynced) {
-    setText(
-      'reviewMessage',
-      'Syncing the session setup before saving the wave…'
-    );
-
-    const syncResult =
-      await syncSessionSetupInBackground();
-
-    if (!syncResult.success) {
-      saveInProgress = false;
-      button.disabled = false;
-
-      setText(
-        'reviewMessage',
-        'The session setup could not be synced. All finish times remain safely stored on this device.'
-      );
-
-      alert(
-        'Unable to sync the run session. Check the connection and try again.'
-      );
-
-      return;
-    }
-  }
-
-  updateSaveStatus(
-    'Saving to Google Sheets…',
-    'pending'
-  );
-
-  setText(
-    'reviewMessage',
-    'Saving the complete wave in one batch…'
-  );
-
-  try {
-    const result = await api({
-      action: 'saveRunWaveBatch',
-
-      sessionId: sessionId,
-      testDate: selectedTestDate,
-      className: selectedClass,
-      wave: currentWave,
-
-      results: currentWaveResults.map(
-        runResult => ({
-          student: {
-            No: runResult.student.No,
-            ID: runResult.student.ID,
-            Name: runResult.student.Name,
-            Gender: runResult.student.Gender,
-            DOB: runResult.student.DOB
-          },
-
-          elapsedSeconds:
-            runResult.elapsedSeconds,
-
-          attemptNo:
-            runResult.attemptNo || 1,
-
-          remarks:
-            runResult.remarks || ''
-        })
-      )
-    });
-
-    const savedResults =
-      result.results || [];
-
-    const resultMap = new Map(
-      savedResults.map(item => [
-        String(
-          item.ID ??
-          item.id ??
-          ''
-        ),
-
-        item
-      ])
-    );
-
-    currentWaveResults.forEach(runResult => {
-      const savedResult =
-        resultMap.get(
-          String(runResult.student.ID)
-        );
-
-      if (savedResult) {
-        runResult.grade =
-          savedResult.Grade ??
-          savedResult.grade ??
-          '';
-
-        runResult.time =
-          savedResult.Time ??
-          savedResult.time ??
-          formatTime(
-            runResult.elapsedSeconds
-          );
-      }
-    });
-
-    if (currentWave === 'Wave 1') {
-      waveOneResults =
-        currentWaveResults.map(result => ({
-          ...result
-        }));
-
-    } else {
-      waveTwoResults =
-        currentWaveResults.map(result => ({
-          ...result
-        }));
-    }
-
-    waveSaved = true;
-
-    updateSaveStatus(
-      'Saved to Google Sheets',
-      'saved'
-    );
-
-    vibrate(90);
-    playTone(820, 0.1);
-
-    saveDraft();
-    showReview();
-
-  } catch (error) {
-    updateSaveStatus(
-      'Save failed · retry',
-      'failed'
-    );
-
-    vibrate([80, 60, 80]);
-
-    setText(
-      'reviewMessage',
-      'Save failed. The results remain stored on this device. Press Save Wave Results to try again.'
-    );
-
-    alert(error.message);
-
-  } finally {
-    saveInProgress = false;
-    button.disabled = false;
-  }
-}
-
-
-function showPostSaveButtons() {
-  const hasWaveTwo =
-    students.some(student => {
-      return student.assignment === 'Wave 2';
-    });
-
-  if (
-    currentWave === 'Wave 1' &&
-    hasWaveTwo
-  ) {
-    document
-      .getElementById('nextWaveBtn')
-      .classList.remove('hidden');
-
-  } else {
-    document
-      .getElementById('completeBtn')
-      .classList.remove('hidden');
-  }
-}
-
-
-function moveToNextWave() {
-  if (!waveSaved) {
-    return;
-  }
-
-  currentWave = 'Wave 2';
-  prepareWave();
-}
-
-
-/* =====================================================
-   COMPLETE SESSION
-===================================================== */
-
-function completeSession() {
-  if (
-    saveInProgress ||
-    !waveSaved
-  ) {
-    return;
-  }
-
-  const hasWaveOne =
-    students.some(student => {
-      return student.assignment === 'Wave 1';
-    });
-
-  const hasWaveTwo =
-    students.some(student => {
-      return student.assignment === 'Wave 2';
-    });
-
-  if (
-    hasWaveOne &&
-    waveOneResults.length === 0
-  ) {
-    alert(
-      'Wave 1 has not been saved to Google Sheets.'
-    );
-
-    return;
-  }
-
-  if (
-    hasWaveTwo &&
-    waveTwoResults.length === 0
-  ) {
-    alert(
-      'Wave 2 has not been saved to Google Sheets.'
-    );
-
-    return;
-  }
-
-  if (!sessionSetupSynced) {
-    alert(
-      'The session setup has not finished syncing. Press Retry Sync before completing the session.'
-    );
-
-    setRetrySetupSyncVisible(true);
-    return;
-  }
-
-  const confirmed = confirm(
-    'Complete this run session?\n\n' +
-    'All wave results have already been saved to Google Sheets.'
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  /*
-   * No Apps Script request is made here.
-   * The results are already saved.
-   */
-  markDraftCompleted();
-
-  const notRunning =
-    students.filter(student => {
-      return student.assignment === 'Not Running';
-    }).length;
-
-  const totalRecorded =
-    waveOneResults.length +
-    waveTwoResults.length +
-    notRunning;
-
-  setText(
-    'completionSummary',
-    `${selectedClass} run completed.\n` +
-    `Wave 1 saved: ${waveOneResults.length} pupil(s)\n` +
-    `Wave 2 saved: ${waveTwoResults.length} pupil(s)\n` +
-    `Not Running: ${notRunning} pupil(s)\n` +
-    `Total recorded: ${totalRecorded} of ${students.length}`
-  );
-
-  updateSaveStatus(
-    'Session completed',
-    'saved'
-  );
-
-  vibrate(100);
-  playTone(880, 0.12);
-
-  showPanel('completionPanel');
-}
-
-
-/* =====================================================
-   LOCAL BACKUP
-===================================================== */
-
-function buildDraft() {
-  return {
-    version: 5,
-    savedAt: new Date().toISOString(),
-    completed: false,
-
-    students: students,
-
-    sessionId: sessionId,
-    selectedTestDate: selectedTestDate,
-    selectedClass: selectedClass,
-    currentWave: currentWave,
-
-    assignmentsConfirmed:
-      assignmentsConfirmed,
-
-    sessionSetupSynced:
-      sessionSetupSynced,
-
-    sessionSetupSyncError:
-      sessionSetupSyncError,
-
-    waveStarted: waveStarted,
-    waveEnded: waveEnded,
-    waveSaved: waveSaved,
-
-    startWallClock: startWallClock,
-
-    currentWaveResults:
-      currentWaveResults,
-
-    waveOneResults:
-      waveOneResults,
-
-    waveTwoResults:
-      waveTwoResults
-  };
-}
-
-
-function saveDraft() {
-  try {
-    localStorage.setItem(
-      RUN_DRAFT_KEY,
-      JSON.stringify(buildDraft())
-    );
-
-  } catch (error) {
-    console.error(
-      'Unable to save local backup:',
-      error
-    );
-  }
-}
-
-
-function markDraftCompleted() {
-  const draft = buildDraft();
-
-  draft.completed = true;
-  draft.completedAt =
-    new Date().toISOString();
-
-  localStorage.setItem(
-    RUN_DRAFT_KEY,
-    JSON.stringify(draft)
-  );
-}
-
-
-function cleanupExpiredBackup() {
-  try {
-    const raw =
-      localStorage.getItem(RUN_DRAFT_KEY);
-
-    if (!raw) {
-      return;
-    }
-
-    const draft = JSON.parse(raw);
-
-    if (
-      draft.completed &&
-      draft.completedAt &&
-      Date.now() -
-        new Date(
-          draft.completedAt
-        ).getTime() >
-        COMPLETED_BACKUP_MS
-    ) {
-      localStorage.removeItem(
-        RUN_DRAFT_KEY
-      );
-    }
-
-  } catch (error) {
-    console.error(
-      'Unable to check saved backup:',
-      error
-    );
-  }
-}
-
-
-/* =====================================================
-   RESTORE SESSION
-===================================================== */
-
-function restoreDraft() {
-  let draft;
-
-  try {
-    const raw =
-      localStorage.getItem(RUN_DRAFT_KEY);
-
-    if (!raw) {
-      return false;
-    }
-
-    draft = JSON.parse(raw);
-
-  } catch (error) {
-    return false;
-  }
-
-  if (
-    !draft ||
-    !draft.sessionId ||
-    !Array.isArray(draft.students)
-  ) {
-    return false;
-  }
-
-  const backupLabel =
-    draft.completed
-      ? 'completed backup'
-      : 'saved session';
-
-  const restore = confirm(
-    `A ${backupLabel} for ${draft.selectedClass} was found.\n` +
-    `Last backup: ${new Date(draft.savedAt).toLocaleString()}\n\n` +
-    'Resume it?'
-  );
-
-  if (!restore) {
-    return false;
-  }
-
-  students = draft.students;
-
-  sessionId = draft.sessionId;
-  selectedTestDate =
-    draft.selectedTestDate;
-
-  selectedClass =
-    draft.selectedClass;
-
-  currentWave =
-    draft.currentWave ||
-    'Wave 1';
-
-  assignmentsConfirmed =
-    Boolean(
-      draft.assignmentsConfirmed
-    );
-
-  sessionSetupSynced =
-    Boolean(
-      draft.sessionSetupSynced
-    );
-
-  sessionSetupSyncError =
-    draft.sessionSetupSyncError ||
-    '';
-
-  sessionSetupSyncing = false;
-  sessionSetupSyncPromise = null;
-
-  waveStarted =
-    Boolean(draft.waveStarted);
-
-  waveEnded =
-    Boolean(draft.waveEnded);
-
-  waveSaved =
-    Boolean(draft.waveSaved);
-
-  startWallClock =
-    draft.startWallClock ||
-    null;
-
-  currentWaveResults =
-    draft.currentWaveResults ||
-    [];
-
-  waveOneResults =
-    draft.waveOneResults ||
-    [];
-
-  waveTwoResults =
-    draft.waveTwoResults ||
-    [];
-
-  if (draft.completed) {
-    setText(
-      'completionSummary',
-      `${selectedClass} completed run backup restored.`
-    );
-
-    showPanel('completionPanel');
-    return true;
-  }
-
-  if (!assignmentsConfirmed) {
-    showPanel('assignmentPanel');
-    renderAssignments();
-    return true;
-  }
-
-  if (waveSaved || waveEnded) {
-    waveStarted = false;
-
-    showReview();
-    resumePendingSessionSync();
-
-    return true;
-  }
-
-  if (draft.waveStarted) {
-    /*
-     * performance.now() cannot survive a refresh.
-     * Continue using the saved wall-clock start.
-     */
-    startPerformanceTime = null;
-
-    showPanel('timingPanel');
-
-    setText(
-      'sessionText',
-      `${selectedClass} · ${currentWave} · ${displayDate(selectedTestDate)}`
-    );
-
-    document.getElementById(
-      'startWaveBtn'
-    ).disabled = true;
-
-    document.getElementById(
-      'endWaveBtn'
-    ).disabled = false;
-
-    document.getElementById(
-      'undoBtn'
-    ).disabled =
-      !currentWaveResults.length;
-
-    updateSaveStatus(
-      sessionSetupSynced
-        ? 'Session synced'
-        : 'Restored · saved locally',
-
-      sessionSetupSynced
-        ? 'saved'
-        : 'pending'
-    );
-
-    setRetrySetupSyncVisible(
-      Boolean(
-        sessionSetupSyncError &&
-        !sessionSetupSynced
-      )
-    );
-
-    renderRunners();
-    requestWakeLock();
-    animateTimer();
-
-    resumePendingSessionSync();
-
-    return true;
-  }
-
-  prepareWave();
-  resumePendingSessionSync();
-
-  return true;
-}
-
-
-function startNewSession() {
-  localStorage.removeItem(
-    RUN_DRAFT_KEY
-  );
-
-  location.reload();
-}
-
-
-/* =====================================================
-   NAVIGATION
-===================================================== */
-
-function hasActiveData() {
-  return (
-    assignmentsConfirmed ||
-    currentWaveResults.length > 0 ||
-    waveOneResults.length > 0 ||
-    waveTwoResults.length > 0
-  );
-}
-
-
-function goHomeSafely() {
-  if (!canLeave()) {
-    return;
-  }
-
-  window.location.href = 'index.html';
-}
-
-
-function handleBackNavigation() {
-  if (!canLeave()) {
-    return;
-  }
-
-  if (window.history.length > 1) {
-    window.history.back();
-
-  } else {
-    window.location.href = 'index.html';
-  }
-}
-
-
-function canLeave() {
-  if (saveInProgress) {
-    alert(
-      'Results are currently saving. Keep this page open.'
-    );
-
-    return false;
-  }
-
-  if (waveStarted && !waveEnded) {
-    alert(
-      'A wave is currently running. End the wave before leaving.'
-    );
-
-    return false;
-  }
-
-  if (
-    hasActiveData() &&
-    !confirm(
-      'Leave this page? The current session will remain backed up on this device.'
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-
-function handleBeforeUnload(event) {
-  if (
-    saveInProgress ||
-    (waveStarted && !waveEnded)
-  ) {
-    event.preventDefault();
-    event.returnValue = '';
-  }
-}
-
-
-/* =====================================================
-   WAKE LOCK
-===================================================== */
-
-async function requestWakeLock() {
-  if (!getSettings().keepAwake) {
-    return;
-  }
-
-  try {
-    if ('wakeLock' in navigator) {
-      wakeLock =
-        await navigator.wakeLock.request(
-          'screen'
-        );
-    }
-
-  } catch (error) {
-    console.warn(
-      'Wake Lock is unavailable:',
-      error
-    );
-  }
-}
-
-
-function releaseWakeLock() {
-  try {
-    if (wakeLock) {
-      wakeLock.release();
-    }
-
-  } catch (error) {
-    console.warn(
-      'Unable to release Wake Lock:',
-      error
-    );
-  }
-
-  wakeLock = null;
-}
-
-
-/* =====================================================
-   SOUND AND VIBRATION
-===================================================== */
-
-function getSettings() {
-  try {
-    return {
-      vibration: true,
-      sounds: false,
-      keepAwake: true,
-
-      ...JSON.parse(
-        localStorage.getItem(
-          SETTINGS_KEY
-        ) || '{}'
-      )
-    };
-
-  } catch (error) {
-    return {
-      vibration: true,
-      sounds: false,
-      keepAwake: true
-    };
-  }
-}
-
-
-function vibrate(pattern) {
-  if (
-    getSettings().vibration &&
-    navigator.vibrate
-  ) {
-    navigator.vibrate(pattern);
-  }
-}
-
-
-function unlockAudio() {
-  if (!getSettings().sounds) {
-    return;
-  }
-
-  if (!audioContext) {
-    audioContext = new (
-      window.AudioContext ||
-      window.webkitAudioContext
-    )();
-  }
-
-  if (audioContext.state === 'suspended') {
-    audioContext.resume();
-  }
-}
-
-
-function playTone(frequency, duration) {
-  if (!getSettings().sounds) {
-    return;
-  }
-
-  try {
-    unlockAudio();
-
-    const oscillator =
-      audioContext.createOscillator();
-
-    const gain =
-      audioContext.createGain();
-
-    oscillator.frequency.value =
-      frequency;
-
-    gain.gain.value = 0.035;
-
-    oscillator.connect(gain);
-
-    gain.connect(
-      audioContext.destination
-    );
-
-    oscillator.start();
-
-    oscillator.stop(
-      audioContext.currentTime +
-      duration
-    );
-
-  } catch (error) {
-    console.warn(
-      'Sound feedback unavailable:',
-      error
-    );
-  }
-}
-
-
-/* =====================================================
-   FORMAT HELPERS
-===================================================== */
-
-function formatTime(value) {
-  const totalSeconds = Math.max(
-    0,
-    Math.round(Number(value) || 0)
-  );
-
-  const minutes =
-    Math.floor(totalSeconds / 60);
-
-  const seconds =
-    totalSeconds % 60;
-
-  return (
-    String(minutes).padStart(2, '0') +
-    ':' +
-    String(seconds).padStart(2, '0')
-  );
-}
-
-
-function formatTenths(value) {
-  const totalSeconds = Math.max(
-    0,
-    Number(value) || 0
-  );
-
-  const minutes =
-    Math.floor(totalSeconds / 60);
-
-  const seconds =
-    Math.floor(totalSeconds % 60);
-
-  const tenths =
-    Math.floor(
-      (totalSeconds % 1) * 10
-    );
-
-  return (
-    String(minutes).padStart(2, '0') +
-    ':' +
-    String(seconds).padStart(2, '0') +
-    '.' +
-    tenths
-  );
-}
-
-
-function displayDate(value) {
-  const parts =
-    String(value || '').split('-');
-
-  if (parts.length !== 3) {
-    return value || '';
-  }
-
-  return (
-    parts[2] +
-    '/' +
-    parts[1] +
-    '/' +
-    parts[0]
-  );
-}
-
 
 function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
